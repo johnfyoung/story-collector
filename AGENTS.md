@@ -17,7 +17,7 @@
 - Components: PascalCase file and component names (e.g., `StoryList.tsx`).
 - Variables/functions: camelCase; constants UPPER_SNAKE_CASE.
 - Hooks: start with `use` (e.g., `useStories`). Prefer named exports.
-- Styles: plain CSS files alongside components (`App.css`, `index.css`).
+- Styles: global variables in `src/index.css`; component-local styles inline.
 - Linting: ESLint config in `eslint.config.js`; fix issues before PRs.
 
 ## Testing Guidelines
@@ -35,4 +35,3 @@
   - `.env.local`: `VITE_API_URL=https://api.example.com`
   - Usage: `import.meta.env.VITE_API_URL`
 - Do not commit secrets; review diffs for accidental keys.
-
