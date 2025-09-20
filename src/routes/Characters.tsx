@@ -20,18 +20,18 @@ export default function Characters() {
     loadContent(storyId).then(setContent);
   }, [storyId, loadContent]);
 
-  const elementsIndex = useMemo(() => {
-    const idx: string[] = [];
-    if (!content) return idx;
-    for (const c of content.characters) if (c.name) idx.push(c.name);
-    for (const s of content.species) if (s.name) idx.push(s.name);
-    for (const p of content.locations) if (p.name) idx.push(p.name);
-    for (const i of content.items) if (i.name) idx.push(i.name);
-    for (const g of content.groups) if (g.name) idx.push(g.name);
-    for (const l of content.languages) if (l.name) idx.push(l.name);
-    for (const pl of content.plotPoints) if (pl.title) idx.push(pl.title);
-    return idx;
-  }, [content]);
+  // const elementsIndex = useMemo(() => {
+  //   const idx: string[] = [];
+  //   if (!content) return idx;
+  //   for (const c of content.characters) if (c.name) idx.push(c.name);
+  //   for (const s of content.species) if (s.name) idx.push(s.name);
+  //   for (const p of content.locations) if (p.name) idx.push(p.name);
+  //   for (const i of content.items) if (i.name) idx.push(i.name);
+  //   for (const g of content.groups) if (g.name) idx.push(g.name);
+  //   for (const l of content.languages) if (l.name) idx.push(l.name);
+  //   for (const pl of content.plotPoints) if (pl.title) idx.push(pl.title);
+  //   return idx;
+  // }, [content]);
 
   const filtered = useMemo(() => {
     if (!content) return [] as Character[];
