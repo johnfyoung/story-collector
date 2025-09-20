@@ -1,4 +1,4 @@
-import { forwardRef, TextareaHTMLAttributes, type CSSProperties } from "react";
+import { forwardRef, type TextareaHTMLAttributes, type CSSProperties } from "react";
 
 type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   label?: string;

@@ -28,6 +28,22 @@ export type DescriptorKey =
   | 'primaryLanguage' | 'secondaryLanguages' | 'languageFluency' | 'accentDialect' | 'slangOrJargon' | 'literacy'
   // Story
   | 'storyRole' | 'shortTermGoals' | 'longTermGoals'
+  // Location: Location
+  | 'dimensions' | 'area' | 'condition' | 'inhabitants' | 'population' | 'objects' | 'militaryStrength'
+  // Location: Biology and Environment
+  | 'feeling' | 'noise' | 'smell' | 'climate' | 'biome' | 'nativeSpecies' | 'sentientRaces' | 'flora' | 'fauna' | 'bodiesOfWater' | 'landmarks' | 'pollution' | 'naturalResources'
+  // Location: Culture
+  | 'languages' | 'architecturalStyle' | 'artAndMusic' | 'generalEthics' | 'ethicalControversies' | 'genderRaceEquality' | 'viewsOnLife' | 'viewsOnDeath' | 'criminality' | 'rituals' | 'punishments' | 'tradePartners' | 'legendsAndMyths'
+  // Location: Politics
+  | 'governmentSystem' | 'politicalFigures' | 'politicalParties' | 'publicOpinion' | 'laws' | 'lawEnforcements' | 'opposingForces'
+  // Location: Magic & Technology
+  | 'technologicalLevel' | 'uniqueTechnologies' | 'magic' | 'medicineAndHealthcare'
+  // Location: History
+  | 'dateFounded' | 'founder' | 'majorEvents'
+  // Location: Religion
+  | 'deities' | 'religiousGroups' | 'religiousLeadersAndProphets' | 'religiousValuesCommandments' | 'freedomOfReligion' | 'governmentViewOnReligion'
+  // Location: Trade & Public Relations
+  | 'currency' | 'majorImports' | 'majorExports' | 'war' | 'alliances'
   // Group: Group
   | 'officialName' | 'alternateNames'
   // Group: Resources

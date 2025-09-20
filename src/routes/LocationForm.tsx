@@ -7,7 +7,9 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
-import type { NamedElement, StoryContent } from '../types'
+import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
+import { Disclosure } from '../components/Disclosure'
+import { AttributePicker } from '../components/AttributePicker'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -23,6 +25,7 @@ export default function LocationForm() {
   const [longDesc, setLongDesc] = useState('')
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
+  const [descriptors, setDescriptors] = useState<Descriptor[]>([])
 
   useEffect(() => {
     if (!storyId) return
@@ -35,6 +38,7 @@ export default function LocationForm() {
           setShortDesc(ex.shortDescription ?? '')
           setLongDesc(ex.longDescription ?? '')
           setAvatarUrl(ex.avatarUrl)
+          setDescriptors(ex.descriptors ?? [])
         }
       }
     })
@@ -57,7 +61,7 @@ export default function LocationForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl }
+      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors }
       const next: StoryContent = {
         ...content,
         locations: content.locations.some((x) => x.id === el.id) ? content.locations.map((x) => (x.id === el.id ? el : x)) : [el, ...content.locations],
@@ -87,6 +91,34 @@ export default function LocationForm() {
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
             <MentionArea value={longDesc} onChange={setLongDesc} suggestions={suggestions} />
           </div>
+          <div style={{ color: 'var(--color-text)', fontWeight: 600, marginTop: 8 }}>Attributes</div>
+          <AttributePicker
+            categories={getLocationCategories()}
+            chosenKeys={descriptors.map((d) => d.key)}
+            onAdd={(key) => setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))}
+          />
+
+          {getLocationCategories().map((cat) => {
+            const items = descriptors.filter((d) => cat.items.some((i) => i.key === d.key))
+            if (items.length === 0) return null
+            return (
+              <Disclosure key={cat.title} title={cat.title} defaultOpen>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {items.map((d) => (
+                    <MentionArea
+                      key={d.id}
+                      label={cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)}
+                      value={d.value}
+                      onChange={(v) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v } : x)))}
+                      suggestions={suggestions}
+                      minHeight={40}
+                    />
+                  ))}
+                </div>
+              </Disclosure>
+            )
+          })}
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>
               Cancel
@@ -99,4 +131,83 @@ export default function LocationForm() {
       </Card>
     </div>
   )
+}
+
+function getLocationCategories(): { title: string; items: { key: DescriptorKey; label: string }[] }[] {
+  return [
+    { title: 'Location', items: [
+      { key: 'dimensions', label: 'Dimensions' },
+      { key: 'area', label: 'Area' },
+      { key: 'condition', label: 'Condition' },
+      { key: 'inhabitants', label: 'Inhabitants' },
+      { key: 'population', label: 'Population' },
+      { key: 'objects', label: 'Objects' },
+      { key: 'militaryStrength', label: 'Military strength' },
+    ]},
+    { title: 'Biology and Environment', items: [
+      { key: 'feeling', label: 'Feeling' },
+      { key: 'noise', label: 'Noise' },
+      { key: 'smell', label: 'Smell' },
+      { key: 'climate', label: 'Climate' },
+      { key: 'biome', label: 'Biome' },
+      { key: 'nativeSpecies', label: 'Native species' },
+      { key: 'sentientRaces', label: 'Sentient races' },
+      { key: 'flora', label: 'Flora' },
+      { key: 'fauna', label: 'Fauna' },
+      { key: 'bodiesOfWater', label: 'Bodies of water' },
+      { key: 'landmarks', label: 'Landmarks' },
+      { key: 'pollution', label: 'Pollution' },
+      { key: 'naturalResources', label: 'Natural resources' },
+    ]},
+    { title: 'Culture', items: [
+      { key: 'languages', label: 'Languages' },
+      { key: 'architecturalStyle', label: 'Architectural style' },
+      { key: 'artAndMusic', label: 'Art & music' },
+      { key: 'generalEthics', label: 'General ethics' },
+      { key: 'ethicalControversies', label: 'Ethical controversies' },
+      { key: 'genderRaceEquality', label: 'Gender/race equality' },
+      { key: 'viewsOnLife', label: 'Views on life' },
+      { key: 'viewsOnDeath', label: 'Views on death' },
+      { key: 'criminality', label: 'Criminality' },
+      { key: 'rituals', label: 'Rituals' },
+      { key: 'punishments', label: 'Punishments' },
+      { key: 'tradePartners', label: 'Trade partners' },
+      { key: 'legendsAndMyths', label: 'Legends & myths' },
+    ]},
+    { title: 'Politics', items: [
+      { key: 'governmentSystem', label: 'Government system' },
+      { key: 'politicalFigures', label: 'Important political figures' },
+      { key: 'politicalParties', label: 'Political parties' },
+      { key: 'publicOpinion', label: 'Opinion of the public' },
+      { key: 'laws', label: 'Laws' },
+      { key: 'lawEnforcements', label: 'Law enforcements' },
+      { key: 'opposingForces', label: 'Opposing forces' },
+    ]},
+    { title: 'Magic & technology', items: [
+      { key: 'technologicalLevel', label: 'Technological level' },
+      { key: 'uniqueTechnologies', label: 'Unique technologies' },
+      { key: 'magic', label: 'Magic' },
+      { key: 'medicineAndHealthcare', label: 'Medicine & healthcare' },
+    ]},
+    { title: 'History', items: [
+      { key: 'dateFounded', label: 'Date founded' },
+      { key: 'founder', label: 'Founder' },
+      { key: 'majorEvents', label: 'Major events' },
+    ]},
+    { title: 'Religion', items: [
+      { key: 'deities', label: 'Deities' },
+      { key: 'religiousGroups', label: 'Religious groups' },
+      { key: 'religiousLeadersAndProphets', label: 'Religious leaders & prophets' },
+      { key: 'religiousValuesCommandments', label: 'Religious values & commandments' },
+      { key: 'freedomOfReligion', label: 'Freedom of religion' },
+      { key: 'governmentViewOnReligion', label: 'Government view on religion' },
+    ]},
+    { title: 'Trade & public relations', items: [
+      { key: 'currency', label: 'Currency' },
+      { key: 'majorImports', label: 'Major imports' },
+      { key: 'majorExports', label: 'Major exports' },
+      { key: 'war', label: 'War' },
+      { key: 'alliances', label: 'Alliances' },
+    ]},
+  ]
 }

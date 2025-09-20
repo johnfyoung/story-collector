@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes, type CSSProperties } from 'react'
+import { type ButtonHTMLAttributes, type CSSProperties } from 'react'
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'ghost'

@@ -60,7 +60,14 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
     const norm: StoryContent = {
       characters: chars,
       species: asArray(raw?.species).map((s: any) => ({ id: String(s?.id ?? genId()), name: String(s?.name ?? ''), shortDescription: s?.shortDescription ? String(s.shortDescription) : undefined, longDescription: s?.longDescription ? String(s.longDescription) : undefined, avatarUrl: s?.avatarUrl ? String(s.avatarUrl) : undefined })),
-      locations: asArray(raw?.locations ?? raw?.places).map((p: any) => ({ id: String(p?.id ?? genId()), name: String(p?.name ?? ''), shortDescription: p?.shortDescription ? String(p.shortDescription) : undefined, longDescription: p?.longDescription ? String(p.longDescription) : undefined, avatarUrl: p?.avatarUrl ? String(p.avatarUrl) : undefined })),
+      locations: asArray(raw?.locations ?? raw?.places).map((p: any) => ({
+        id: String(p?.id ?? genId()),
+        name: String(p?.name ?? ''),
+        shortDescription: p?.shortDescription ? String(p.shortDescription) : undefined,
+        longDescription: p?.longDescription ? String(p.longDescription) : undefined,
+        avatarUrl: p?.avatarUrl ? String(p.avatarUrl) : undefined,
+        descriptors: asArray(p?.descriptors).map((d: any) => ({ id: String(d?.id ?? genId()), key: d?.key ?? 'notes', value: String(d?.value ?? '') })),
+      })),
       groups: asArray(raw?.groups).map((g: any) => ({
         id: String(g?.id ?? genId()),
         name: String(g?.name ?? ''),
