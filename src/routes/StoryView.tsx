@@ -7,7 +7,7 @@ import type { CSSProperties } from 'react'
 export default function StoryView() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { get } = useStories()
+  const { get, remove } = useStories()
   const story = id ? get(id) : undefined
 
   if (!story) {
@@ -21,22 +21,41 @@ export default function StoryView() {
         <IconButton aria-label="Edit story" onClick={() => navigate(`/stories/${story.id}/edit`)} title="Edit">
           ✏️
         </IconButton>
+        <button
+          onClick={async () => {
+            if (!id) return
+            const ok = confirm('Delete this story? This cannot be undone.')
+            if (!ok) return
+            try {
+              await remove(id)
+              navigate('/')
+            } catch (e) {
+              alert('Failed to delete story')
+            }
+          }}
+          style={{
+            marginLeft: 8,
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '6px 10px',
+            color: 'crimson',
+            cursor: 'pointer',
+          }}
+        >
+          Delete
+        </button>
       </div>
       <div style={{ color: 'var(--color-text-muted)' }}>{story.shortDescription}</div>
       <Card>
         <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <Link to={`/stories/${story.id}/characters`} style={linkStyle}>
-            Characters
-          </Link>
-          <Link to={`/stories/${story.id}/places`} style={linkStyle}>
-            Places
-          </Link>
-          <Link to={`/stories/${story.id}/items`} style={linkStyle}>
-            Items
-          </Link>
-          <Link to={`/stories/${story.id}/plot-points`} style={linkStyle}>
-            Plot points
-          </Link>
+          <Link to={`/stories/${story.id}/characters`} style={linkStyle}>Characters</Link>
+          <Link to={`/stories/${story.id}/groups`} style={linkStyle}>Groups</Link>
+          <Link to={`/stories/${story.id}/locations`} style={linkStyle}>Locations</Link>
+          <Link to={`/stories/${story.id}/species`} style={linkStyle}>Species</Link>
+          <Link to={`/stories/${story.id}/items`} style={linkStyle}>Items</Link>
+          <Link to={`/stories/${story.id}/languages`} style={linkStyle}>Languages</Link>
+          <Link to={`/stories/${story.id}/plot-points`} style={linkStyle}>Plot points</Link>
         </nav>
       </Card>
     </div>

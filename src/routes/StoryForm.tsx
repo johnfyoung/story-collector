@@ -18,14 +18,14 @@ export default function StoryForm() {
   const [name, setName] = useState(existing?.name ?? '')
   const [shortDescription, setShortDescription] = useState(existing?.shortDescription ?? '')
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
     if (isEdit && id) {
       update(id, { name: name.trim(), shortDescription: shortDescription.trim().slice(0, MAX_DESC) })
       navigate(`/stories/${id}`)
     } else {
-      const s = create({ name: name.trim(), shortDescription: shortDescription.trim().slice(0, MAX_DESC) })
+      const s = await create({ name: name.trim(), shortDescription: shortDescription.trim().slice(0, MAX_DESC) })
       navigate(`/stories/${s.id}`)
     }
   }
@@ -48,4 +48,3 @@ export default function StoryForm() {
     </div>
   )
 }
-
