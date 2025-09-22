@@ -114,7 +114,20 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
         setStories(stories)
       })
       .catch(() => {})
-    const unsubDocs = remote.subscribeDocs((type, doc) => {
+    const unsubDocs = remote.subscribeDocs((type, doc, raw) => {
+      if (type === 'delete') {
+        delete fileIdsRef.current[doc.id]
+        try {
+          localStorage.removeItem(localContentKey(doc.id))
+        } catch {
+          // ignore local cache cleanup failure
+        }
+      } else {
+        const fileId = String((raw as any)?.jsonFileId ?? '')
+        if (fileId) {
+          fileIdsRef.current[doc.id] = fileId
+        }
+      }
       setStories((prev) => {
         if (type === 'create') return [doc, ...prev.filter((p) => p.id !== doc.id)]
         if (type === 'update') return prev.map((p) => (p.id === doc.id ? doc : p))
@@ -168,6 +181,8 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
     },
     remove: async (id: string) => {
       // optimistic remove
+      delete fileIdsRef.current[id]
+      try { localStorage.removeItem(localContentKey(id)) } catch {}
       setStories((prev) => prev.filter((s) => s.id !== id))
       if (remoteEnabled && remoteRef.current) {
         try {

@@ -180,7 +180,11 @@ export class StoriesRemote {
   }
 
   subscribeDocs(
-    handler: (type: "create" | "update" | "delete", doc: Story) => void
+    handler: (
+      type: "create" | "update" | "delete",
+      doc: Story,
+      raw: Models.Document
+    ) => void
   ) {
     if (!DB_ID || !STORIES_COLLECTION_ID)
       throw new Error("Remote stories not configured");
@@ -189,11 +193,11 @@ export class StoriesRemote {
       const events: string[] = resp.events || [];
       const doc = resp.payload as Models.Document;
       const story = toStory(doc);
-      if (events.some((e) => e.endsWith(".create"))) handler("create", story);
+      if (events.some((e) => e.endsWith(".create"))) handler("create", story, doc);
       else if (events.some((e) => e.endsWith(".update")))
-        handler("update", story);
+        handler("update", story, doc);
       else if (events.some((e) => e.endsWith(".delete")))
-        handler("delete", story);
+        handler("delete", story, doc);
     });
     return unsub;
   }
