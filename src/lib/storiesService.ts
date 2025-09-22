@@ -40,6 +40,16 @@ export class StoriesRemote {
     ];
   }
 
+  private permsFile() {
+    const user = Role.user(this.ownerId);
+    return [
+      Permission.read(Role.any()),
+      Permission.write(user),
+      Permission.update(user),
+      Permission.delete(user),
+    ];
+  }
+
   async listWithFiles(): Promise<{
     stories: Story[];
     files: Record<string, string>;
@@ -85,7 +95,7 @@ export class StoriesRemote {
       BUCKET_ID,
       ID.unique(),
       fileObj,
-      this.permsOwner()
+      this.permsFile()
     );
     const doc = await this.db.createDocument(
       DB_ID,
@@ -128,7 +138,7 @@ export class StoriesRemote {
       BUCKET_ID,
       ID.unique(),
       fileObj,
-      this.permsOwner()
+      this.permsFile()
     );
     await this.db.updateDocument(DB_ID, STORIES_COLLECTION_ID, storyId, {
       jsonFileId: file.$id,
@@ -144,15 +154,10 @@ export class StoriesRemote {
 
   async readJson(fileId: string): Promise<StoryContent> {
     if (!BUCKET_ID) throw new Error("Remote stories not configured");
-    // getFileDownload returns a URL that requires a fetch
-    const urlOrString = this.storage.getFileDownload(
-      BUCKET_ID,
-      fileId
-    ) as unknown as string | URL;
-    const href =
-      typeof urlOrString === "string" ? urlOrString : urlOrString.href;
-    const res = await fetch(href, { credentials: "include" });
-    return (await res.json()) as StoryContent;
+    // Use the Appwrite client to download so auth headers & cookies are preserved
+    const url = this.storage.getFileDownload(BUCKET_ID, fileId) as URL;
+    const data = await client.call("get", url);
+    return data as StoryContent;
   }
 
   async deleteStory(storyId: string): Promise<void> {
