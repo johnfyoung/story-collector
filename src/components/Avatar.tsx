@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { uploadImage } from '../lib/assets'
+import {
+  uploadImage as uploadLocalImage,
+  isCloudinaryConfigured,
+  openCloudinaryUploadWidget,
+} from '../lib/assets'
 
 export function Avatar({ name, url, size = 56, editable = false, onChange }: { name: string; url?: string; size?: number; editable?: boolean; onChange?: (nextUrl: string) => void }) {
   const { user } = useAuth()
@@ -9,8 +13,24 @@ export function Avatar({ name, url, size = 56, editable = false, onChange }: { n
   const inputRef = useRef<HTMLInputElement>(null)
   const letter = (name?.trim()?.[0] || '?').toUpperCase()
 
+  const canUseCloudinary = isCloudinaryConfigured()
+
   async function pickFile() {
-    if (!editable) return
+    if (!editable || busy) return
+    if (canUseCloudinary) {
+      setBusy(true)
+      try {
+        const uploaded = await openCloudinaryUploadWidget(user?.$id)
+        if (uploaded?.href) {
+          onChange?.(uploaded.href)
+        }
+      } catch (error) {
+        console.error('Failed to upload image with Cloudinary widget', error)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     inputRef.current?.click()
   }
 
@@ -19,7 +39,7 @@ export function Avatar({ name, url, size = 56, editable = false, onChange }: { n
     if (!f) return
     setBusy(true)
     try {
-      const { href } = await uploadImage(f, user?.$id)
+      const { href } = await uploadLocalImage(f)
       onChange?.(href)
     } finally {
       setBusy(false)
