@@ -63,6 +63,8 @@ export default function Groups() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <h1 style={{ margin: 0, color: "var(--color-text)" }}>Groups</h1>
@@ -107,10 +109,17 @@ export default function Groups() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
                   }}
                 >
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
                   >
                     <Avatar
                       name={el.name}
@@ -119,7 +128,7 @@ export default function Groups() {
                       editable={false}
                       onChange={() => {}}
                     />
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div
                         style={{ color: "var(--color-text)", fontWeight: 600 }}
                       >
@@ -137,7 +146,7 @@ export default function Groups() {
                       ) : null}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {storyId ? (
                       <a
                         href={`/stories/${storyId}/groups/${el.id}/edit`}

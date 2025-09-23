@@ -53,6 +53,8 @@ export default function Characters() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <h1 style={{ margin: 0, color: "var(--color-text)" }}>Characters</h1>
@@ -96,10 +98,16 @@ export default function Characters() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     gap: 12,
+                    flexWrap: "wrap",
                   }}
                 >
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
                   >
                     <Avatar
                       name={c.name}
@@ -110,7 +118,7 @@ export default function Characters() {
                         /* no-op in list */
                       }}
                     />
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div
                         style={{ color: "var(--color-text)", fontWeight: 600 }}
                       >

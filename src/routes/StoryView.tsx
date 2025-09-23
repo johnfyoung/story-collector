@@ -16,7 +16,7 @@ export default function StoryView() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, color: 'var(--color-text)' }}>{story.name}</h1>
         <IconButton aria-label="Edit story" onClick={() => navigate(`/stories/${story.id}/edit`)} title="Edit">
           ✏️
@@ -29,7 +29,8 @@ export default function StoryView() {
             try {
               await remove(id)
               navigate('/')
-            } catch (e) {
+            } catch (error) {
+              console.error('Failed to delete story', error)
               alert('Failed to delete story')
             }
           }}
