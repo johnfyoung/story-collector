@@ -1,10 +1,41 @@
 import { useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import {
-  uploadImage as uploadLocalImage,
+  uploadImage,
   isCloudinaryConfigured,
   openCloudinaryUploadWidget,
 } from '../lib/assets'
+
+function shouldPreferDeviceUpload(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const nav = window.navigator as Navigator & { msMaxTouchPoints?: number }
+  if (typeof nav.maxTouchPoints === 'number' && nav.maxTouchPoints > 1) {
+    return true
+  }
+
+  if (typeof nav.msMaxTouchPoints === 'number' && nav.msMaxTouchPoints > 1) {
+    return true
+  }
+
+  if ('ontouchstart' in window) {
+    return true
+  }
+
+  if (typeof window.matchMedia === 'function') {
+    try {
+      if (window.matchMedia('(pointer: coarse)').matches) {
+        return true
+      }
+    } catch {
+      // Ignore matchMedia errors (older browsers or SSR environments)
+    }
+  }
+
+  return false
+}
 
 export function Avatar({ name, url, size = 56, editable = false, onChange }: { name: string; url?: string; size?: number; editable?: boolean; onChange?: (nextUrl: string) => void }) {
   const { user } = useAuth()
@@ -17,7 +48,9 @@ export function Avatar({ name, url, size = 56, editable = false, onChange }: { n
 
   async function pickFile() {
     if (!editable || busy) return
-    if (canUseCloudinary) {
+    const preferDeviceUpload = canUseCloudinary && shouldPreferDeviceUpload()
+
+    if (canUseCloudinary && !preferDeviceUpload) {
       setBusy(true)
       try {
         const uploaded = await openCloudinaryUploadWidget(user?.$id)
@@ -39,8 +72,10 @@ export function Avatar({ name, url, size = 56, editable = false, onChange }: { n
     if (!f) return
     setBusy(true)
     try {
-      const { href } = await uploadLocalImage(f)
+      const { href } = await uploadImage(f, user?.$id)
       onChange?.(href)
+    } catch (error) {
+      console.error('Failed to upload image from device', error)
     } finally {
       setBusy(false)
       e.currentTarget.value = ''

@@ -1,8 +1,16 @@
-export { isCloudinaryConfigured, openCloudinaryUploadWidget } from "./cloudinary";
+import { isCloudinaryConfigured, uploadImageFile } from "./cloudinary";
+
+export { openCloudinaryUploadWidget } from "./cloudinary";
+export { isCloudinaryConfigured };
 
 export async function uploadImage(
-  file: File
+  file: File,
+  ownerId?: string
 ): Promise<{ fileId: string; href: string }> {
+  if (isCloudinaryConfigured()) {
+    return uploadImageFile(file, ownerId);
+  }
+
   const href = await fileToDataURL(file);
   return { fileId: "local", href };
 }
