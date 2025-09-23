@@ -127,6 +127,65 @@ export async function openCloudinaryUploadWidget(
   const cloudinary = await loadWidgetLibrary();
 
   return new Promise<{ fileId: string; href: string } | null>((resolve, reject) => {
+    if (typeof document === "undefined") {
+      reject(
+        new Error("Cloudinary upload widget is only available in the browser")
+      );
+      return;
+    }
+
+    const captureStyles = (element: HTMLElement, properties: string[]) =>
+      properties.map<[string, string]>((property) => [
+        property,
+        element.style.getPropertyValue(property),
+      ]);
+
+    const restoreStyles = (
+      element: HTMLElement,
+      entries: Array<[string, string]>
+    ) => {
+      for (const [property, value] of entries) {
+        if (value) {
+          element.style.setProperty(property, value);
+        } else {
+          element.style.removeProperty(property);
+        }
+      }
+    };
+
+    const body = document.body;
+    const html = document.documentElement;
+    const bodyStyles = captureStyles(body, [
+      "overflow",
+      "overflow-x",
+      "overflow-y",
+      "padding-right",
+    ]);
+    const htmlStyles = captureStyles(html, [
+      "overflow",
+      "overflow-x",
+      "overflow-y",
+      "padding-right",
+    ]);
+
+    const restoreScrollState = () => {
+      const apply = () => {
+        restoreStyles(body, bodyStyles);
+        restoreStyles(html, htmlStyles);
+      };
+
+      if (
+        typeof window !== "undefined" &&
+        typeof window.requestAnimationFrame === "function"
+      ) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(apply);
+        });
+      } else {
+        setTimeout(apply, 0);
+      }
+    };
+
     let settled = false;
 
     const options: Record<string, unknown> = {
@@ -146,7 +205,28 @@ export async function openCloudinaryUploadWidget(
       options.context = { owner_id: ownerId };
     }
 
-    let widget: CloudinaryWidget;
+    let widget: CloudinaryWidget | null = null;
+
+    const finalize = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+
+      try {
+        widget?.destroy();
+      } catch {
+        // Ignore errors that happen while cleaning up the widget instance.
+      } finally {
+        widget = null;
+      }
+
+      try {
+        callback();
+      } finally {
+        restoreScrollState();
+      }
+    };
 
     try {
       widget = cloudinary.createUploadWidget(options, (error, result) => {
@@ -155,9 +235,9 @@ export async function openCloudinaryUploadWidget(
         }
 
         if (error) {
-          settled = true;
-          widget.destroy();
-          reject(toError(error, "Cloudinary upload failed"));
+          finalize(() => {
+            reject(toError(error, "Cloudinary upload failed"));
+          });
           return;
         }
 
@@ -166,67 +246,81 @@ export async function openCloudinaryUploadWidget(
         }
 
         if (result.event === "error") {
-          settled = true;
-          widget.destroy();
-          const info = result.info;
-          const rawMessage =
-            info && typeof info === "object"
-              ? (info as Record<string, unknown>).message
-              : undefined;
-          const message =
-            typeof rawMessage === "string" && rawMessage.trim()
-              ? rawMessage
-              : null;
-          reject(
-            message
-              ? new Error(`Cloudinary upload failed: ${message}`)
-              : new Error("Cloudinary upload failed")
-          );
+          finalize(() => {
+            const info = result.info;
+            const rawMessage =
+              info && typeof info === "object"
+                ? (info as Record<string, unknown>).message
+                : undefined;
+            const message =
+              typeof rawMessage === "string" && rawMessage.trim()
+                ? rawMessage
+                : null;
+            reject(
+              message
+                ? new Error(`Cloudinary upload failed: ${message}`)
+                : new Error("Cloudinary upload failed")
+            );
+          });
           return;
         }
 
-        if (result.event === "success" && result.info) {
+        if (result.event === "success") {
           const info = result.info;
-          if (typeof info !== "object") {
-            settled = true;
-            widget.destroy();
-            reject(new Error("Cloudinary upload did not return file info"));
+          if (!info || typeof info !== "object") {
+            finalize(() => {
+              reject(new Error("Cloudinary upload did not return file info"));
+            });
             return;
           }
 
-          const href = info.secure_url ?? info.url;
+          const details = info as CloudinaryWidgetInfo;
+          const href = details.secure_url ?? details.url;
           if (!href) {
-            settled = true;
-            widget.destroy();
-            reject(new Error("Cloudinary upload did not include an image URL"));
+            finalize(() => {
+              reject(new Error("Cloudinary upload did not include an image URL"));
+            });
             return;
           }
 
-          const fileId = info.public_id ?? info.asset_id ?? href;
-          settled = true;
-          widget.destroy();
-          resolve({ fileId, href });
+          const fileId = details.public_id ?? details.asset_id ?? href;
+          finalize(() => {
+            resolve({ fileId, href });
+          });
           return;
         }
 
-        if (result.event === "abort") {
-          settled = true;
-          widget.destroy();
-          resolve(null);
-          return;
-        }
-
-        if (result.event === "close") {
-          settled = true;
-          widget.destroy();
-          resolve(null);
+        if (result.event === "abort" || result.event === "close") {
+          finalize(() => {
+            resolve(null);
+          });
         }
       });
     } catch (creationError) {
-      reject(toError(creationError, "Failed to initialize the Cloudinary upload widget"));
+      finalize(() => {
+        reject(
+          toError(
+            creationError,
+            "Failed to initialize the Cloudinary upload widget"
+          )
+        );
+      });
       return;
     }
 
-    widget.open();
+    if (!widget) {
+      finalize(() => {
+        reject(new Error("Failed to initialize the Cloudinary upload widget"));
+      });
+      return;
+    }
+
+    try {
+      widget.open();
+    } catch (openError) {
+      finalize(() => {
+        reject(toError(openError, "Failed to open the Cloudinary upload widget"));
+      });
+    }
   });
 }

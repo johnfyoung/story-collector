@@ -5,7 +5,8 @@ export function Card({ children, style, onClick }: { children: ReactNode; style?
     background: 'var(--color-surface)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-lg)',
-    padding: '16px',
+    padding: 'clamp(12px, 3vw, 20px)',
+    width: '100%',
     cursor: onClick ? 'pointer' as const : 'default',
   }
   return (

@@ -39,7 +39,7 @@ export default function SignIn() {
         padding: 16,
       }}
     >
-      <Card style={{ width: 360 }}>
+      <Card style={{ width: '100%', maxWidth: 360 }}>
         <h1 style={{ marginTop: 0, color: "var(--color-text)" }}>Sign in</h1>
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
           <TextField

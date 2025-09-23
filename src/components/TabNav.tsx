@@ -15,7 +15,14 @@ export function TabNav({ active, storyId }: { active: 'characters' | 'groups' | 
 
   return (
     <div style={{ borderBottom: '1px solid var(--color-border)', marginBottom: 12 }}>
-      <nav style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+      <nav
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          rowGap: 8,
+        }}
+      >
         {tabs.map((t) => {
           const isActive = t.to.endsWith(active)
           return (
@@ -30,6 +37,9 @@ export function TabNav({ active, storyId }: { active: 'characters' | 'groups' | 
                 border: '1px solid var(--color-border)',
                 borderBottomColor: isActive ? 'var(--color-primary)' : 'var(--color-border)',
                 borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+                flex: '1 1 140px',
+                minWidth: 120,
+                textAlign: 'center',
               }}
             >
               {t.label}

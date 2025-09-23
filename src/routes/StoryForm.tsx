@@ -60,7 +60,14 @@ export default function StoryForm() {
             }
             maxChars={MAX_DESC}
           />
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              justifyContent: "flex-end",
+              flexWrap: "wrap",
+            }}
+          >
             <Button
               variant="ghost"
               type="button"
