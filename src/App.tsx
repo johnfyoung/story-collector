@@ -17,12 +17,13 @@ import LanguageForm from './routes/LanguageForm'
 import { TopNav } from './components/TopNav'
 import SignIn from './routes/SignIn'
 import RequireAuth from './auth/RequireAuth'
+import './App.css'
 
 function Shell() {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)' }}>
+    <div className="app-shell">
       <TopNav />
-      <main style={{ maxWidth: 960, margin: '0 auto', padding: '16px' }}>
+      <main className="app-main">
         <Outlet />
       </main>
     </div>

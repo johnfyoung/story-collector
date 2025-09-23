@@ -116,7 +116,7 @@ export default function GroupForm() {
       {elemId ? null : <h1 style={{ color: 'var(--color-text)', margin: 0 }}>Add group</h1>}
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
@@ -159,7 +159,7 @@ export default function GroupForm() {
             )
           })}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>
               Cancel
             </Button>
