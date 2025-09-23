@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DescriptorKey } from "../types";
 
 export type AttrMeta = { key: DescriptorKey; label: string };
@@ -15,6 +15,7 @@ export function AttributePicker({
   const [query, setQuery] = useState("");
   const [browseOpen, setBrowseOpen] = useState(false);
   const [activeCat, setActiveCat] = useState(0);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const chosen = useMemo(
     () => new Set<DescriptorKey>(chosenKeys),
     [chosenKeys]
@@ -33,6 +34,12 @@ export function AttributePicker({
       .filter((it) => it.label.toLowerCase().includes(q))
       .slice(0, 8);
   }, [query, allItems]);
+
+  useEffect(() => {
+    if (!browseOpen) return;
+    const active = tabRefs.current[activeCat];
+    active?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [activeCat, browseOpen]);
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -109,6 +116,12 @@ export function AttributePicker({
           <div
             style={{
               display: "flex",
+              overflowX: "auto",
+              overscrollBehaviorX: "contain",
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              scrollSnapType: "x proximity",
             }}
           >
             {categories.map((c, i) => (
@@ -117,19 +130,27 @@ export function AttributePicker({
                 type="button"
                 onClick={() => setActiveCat(i)}
                 style={{
-                  flex: 1,
+                  flex: "0 0 auto",
                   padding: "8px 10px",
+                  minWidth: 120,
                   background:
                     i === activeCat ? "var(--color-bg-white)" : "transparent",
                   border: "none",
                   borderBottom:
-                    i === activeCat ? "none" : "1px solid var(--color-border)",
+                    i === activeCat
+                      ? "3px solid var(--color-primary)"
+                      : "1px solid var(--color-border)",
                   borderRight:
                     i < categories.length - 1
                       ? "1px solid var(--color-border)"
                       : "none",
                   cursor: "pointer",
                   color: "var(--color-text-black)",
+                  fontWeight: i === activeCat ? 600 : 500,
+                  scrollSnapAlign: "center",
+                }}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
                 }}
               >
                 {c.title}

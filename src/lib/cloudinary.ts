@@ -5,6 +5,9 @@ const CLOUDINARY_UPLOAD_PRESET = import.meta.env
   .VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 const CLOUDINARY_UPLOAD_FOLDER = import.meta.env
   .VITE_CLOUDINARY_UPLOAD_FOLDER as string | undefined;
+const CLOUDINARY_UPLOAD_URL = CLOUDINARY_CLOUD_NAME
+  ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`
+  : null;
 
 export function isCloudinaryConfigured(): boolean {
   return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET);
@@ -33,6 +36,16 @@ type Cloudinary = {
     options: Record<string, unknown>,
     callback: (error: unknown, result: CloudinaryWidgetResult) => void
   ) => CloudinaryWidget;
+};
+
+type CloudinaryUploadResponse = {
+  asset_id?: string;
+  public_id?: string;
+  secure_url?: string;
+  url?: string;
+  error?: {
+    message?: string;
+  };
 };
 
 declare global {
@@ -115,6 +128,109 @@ function toError(value: unknown, fallbackMessage: string): Error {
       : "";
   const message = detail ? `${fallbackMessage}: ${detail}` : fallbackMessage;
   return new Error(message);
+}
+
+function extractUploadErrorMessage(
+  payload: CloudinaryUploadResponse | null
+): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  const error = payload.error;
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const message = (error as { message?: unknown }).message;
+  if (typeof message === "string") {
+    const trimmed = message.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
+export async function uploadImageFile(
+  file: File,
+  ownerId?: string
+): Promise<{ fileId: string; href: string }> {
+  if (!isCloudinaryConfigured() || !CLOUDINARY_UPLOAD_URL) {
+    throw new Error("Cloudinary upload widget is not configured");
+  }
+
+  if (typeof fetch !== "function") {
+    throw new Error("Cloudinary uploads require the Fetch API in the browser");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET!);
+
+  if (CLOUDINARY_UPLOAD_FOLDER) {
+    formData.append("folder", CLOUDINARY_UPLOAD_FOLDER);
+  }
+
+  if (ownerId) {
+    formData.append("context", `owner_id=${ownerId}`);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(CLOUDINARY_UPLOAD_URL, {
+      method: "POST",
+      body: formData,
+    });
+  } catch (networkError) {
+    throw toError(networkError, "Failed to upload image to Cloudinary");
+  }
+
+  let responseText: string | null = null;
+  try {
+    responseText = await response.text();
+  } catch {
+    responseText = null;
+  }
+
+  let payload: CloudinaryUploadResponse | null = null;
+  if (responseText) {
+    try {
+      payload = JSON.parse(responseText) as CloudinaryUploadResponse;
+    } catch {
+      payload = null;
+    }
+  }
+
+  const responseErrorMessage =
+    extractUploadErrorMessage(payload) ||
+    (responseText && responseText.trim() ? responseText.trim() : null) ||
+    response.statusText;
+
+  if (!response.ok) {
+    throw new Error(
+      responseErrorMessage
+        ? `Failed to upload image to Cloudinary: ${responseErrorMessage}`
+        : "Failed to upload image to Cloudinary"
+    );
+  }
+
+  if (!payload) {
+    throw new Error("Cloudinary upload response was empty");
+  }
+
+  const href = payload.secure_url ?? payload.url;
+  if (!href) {
+    throw new Error(
+      responseErrorMessage
+        ? `Cloudinary upload response did not include an image URL: ${responseErrorMessage}`
+        : "Cloudinary upload response did not include an image URL"
+    );
+  }
+
+  const fileId = payload.public_id ?? payload.asset_id ?? href;
+  return { fileId, href };
 }
 
 export async function openCloudinaryUploadWidget(
