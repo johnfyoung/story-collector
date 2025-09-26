@@ -14,6 +14,7 @@ import SpeciesForm from './routes/SpeciesForm'
 import LocationForm from './routes/LocationForm'
 import GroupForm from './routes/GroupForm'
 import LanguageForm from './routes/LanguageForm'
+import HabitNotifications from './routes/HabitNotifications'
 import { TopNav } from './components/TopNav'
 import SignIn from './routes/SignIn'
 import RequireAuth from './auth/RequireAuth'
@@ -33,11 +34,12 @@ function Shell() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<SignIn />} />
-      <Route element={<RequireAuth />}>
-        <Route element={<Shell />}>
-          <Route index element={<Dashboard />} />
-          <Route path="stories">
+          <Route path="/login" element={<SignIn />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<Shell />}>
+              <Route index element={<Dashboard />} />
+              <Route path="notifications/habits" element={<HabitNotifications />} />
+              <Route path="stories">
             <Route path="new" element={<StoryForm />} />
             <Route path=":id" element={<StoryView />} />
             <Route path=":id/edit" element={<StoryForm />} />

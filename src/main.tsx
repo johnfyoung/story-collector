@@ -4,8 +4,9 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { BrowserRouter } from 'react-router-dom'
-import { StoriesProvider } from './state/StoriesProvider'
 import { AuthProvider } from './auth/AuthProvider'
+import { StoriesProvider } from './state/StoriesProvider'
+import { NotificationSettingsProvider } from './state/NotificationSettingsProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <StoriesProvider>
-            <App />
+            <NotificationSettingsProvider>
+              <App />
+            </NotificationSettingsProvider>
           </StoriesProvider>
         </AuthProvider>
       </BrowserRouter>

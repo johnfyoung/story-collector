@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useTheme } from '../theme/useTheme'
 import { useAuth } from '../auth/AuthProvider'
 import './TopNav.css'
@@ -6,12 +6,34 @@ import './TopNav.css'
 export function TopNav() {
   const { theme, toggle } = useTheme()
   const { user, signOut } = useAuth()
+  const navLinks = [
+    { to: '/', label: 'Dashboard' },
+    { to: '/notifications/habits', label: 'Notifications' },
+  ]
   return (
     <header className="top-nav">
       <div className="top-nav__content">
-        <Link to="/" className="top-nav__brand">
-          Story Collector
-        </Link>
+        <div className="top-nav__brand-group">
+          <Link to="/" className="top-nav__brand">
+            Story Collector
+          </Link>
+          <nav className="top-nav__links">
+            {navLinks.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.to === '/'}
+                className={({ isActive }) =>
+                  ['top-nav__link', isActive ? 'top-nav__link--active' : undefined]
+                    .filter(Boolean)
+                    .join(' ')
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
         <div className="top-nav__actions">
           <button type="button" onClick={toggle} className="top-nav__theme-toggle">
             Theme: {theme.name}
