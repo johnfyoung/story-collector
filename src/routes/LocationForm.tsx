@@ -10,6 +10,7 @@ import { Avatar } from '../components/Avatar'
 import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
+import { ImagesField } from '../components/ImagesField'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -104,16 +105,34 @@ export default function LocationForm() {
             return (
               <Disclosure key={cat.title} title={cat.title} defaultOpen>
                 <div style={{ display: 'grid', gap: 8 }}>
-                  {items.map((d) => (
-                    <MentionArea
-                      key={d.id}
-                      label={cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)}
-                      value={d.value}
-                      onChange={(v) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v } : x)))}
-                      suggestions={suggestions}
-                      minHeight={40}
-                    />
-                  ))}
+                  {items.map((d) => {
+                    if (d.key === 'images') {
+                      const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
+                      return (
+                        <ImagesField
+                          key={d.id}
+                          label={label}
+                          value={d.value}
+                          onChange={(next) =>
+                            setDescriptors((prev) =>
+                              prev.map((x) => (x.id === d.id ? { ...x, value: next } : x)),
+                            )
+                          }
+                          mainImageUrl={avatarUrl}
+                        />
+                      )
+                    }
+                    return (
+                      <MentionArea
+                        key={d.id}
+                        label={cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)}
+                        value={d.value}
+                        onChange={(v) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v } : x)))}
+                        suggestions={suggestions}
+                        minHeight={40}
+                      />
+                    )
+                  })}
                 </div>
               </Disclosure>
             )
@@ -208,6 +227,9 @@ function getLocationCategories(): { title: string; items: { key: DescriptorKey; 
       { key: 'majorExports', label: 'Major exports' },
       { key: 'war', label: 'War' },
       { key: 'alliances', label: 'Alliances' },
+    ]},
+    { title: 'Media', items: [
+      { key: 'images', label: 'Images' },
     ]},
   ]
 }
