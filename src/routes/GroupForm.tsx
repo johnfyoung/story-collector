@@ -10,6 +10,7 @@ import { Avatar } from '../components/Avatar'
 import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
+import { ImagesField } from '../components/ImagesField'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -143,6 +144,21 @@ export default function GroupForm() {
                   {items.map((d) => {
                     const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
                     const s = mapSuggestionsForKey(d.key)
+                    if (d.key === 'images') {
+                      return (
+                        <ImagesField
+                          key={d.id}
+                          label={label}
+                          value={d.value}
+                          onChange={(next) =>
+                            setDescriptors((prev) =>
+                              prev.map((x) => (x.id === d.id ? { ...x, value: next } : x)),
+                            )
+                          }
+                          mainImageUrl={avatarUrl}
+                        />
+                      )
+                    }
                     return (
                       <MentionArea
                         key={d.id}
@@ -230,6 +246,9 @@ function getGroupCategories(): { title: string; items: { key: DescriptorKey; lab
       { key: 'enemies', label: 'Enemies' },
       { key: 'dissolutionDate', label: 'Dissolution date' },
       { key: 'dissolutionHistory', label: 'Dissolution history' },
+    ]},
+    { title: 'Media', items: [
+      { key: 'images', label: 'Images' },
     ]},
     { title: 'Members', items: [
       { key: 'members', label: 'Members' },

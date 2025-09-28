@@ -7,7 +7,10 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
-import type { NamedElement, StoryContent } from '../types'
+import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
+import { Disclosure } from '../components/Disclosure'
+import { AttributePicker } from '../components/AttributePicker'
+import { ImagesField } from '../components/ImagesField'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -23,6 +26,7 @@ export default function SpeciesForm() {
   const [longDesc, setLongDesc] = useState('')
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
+  const [descriptors, setDescriptors] = useState<Descriptor[]>([])
 
   useEffect(() => {
     if (!storyId) return
@@ -35,6 +39,7 @@ export default function SpeciesForm() {
           setShortDesc(ex.shortDescription ?? '')
           setLongDesc(ex.longDescription ?? '')
           setAvatarUrl(ex.avatarUrl)
+          setDescriptors(ex.descriptors ?? [])
         }
       }
     })
@@ -53,11 +58,26 @@ export default function SpeciesForm() {
     return idx
   }, [content])
 
+  const addDescriptor = (key: DescriptorKey) => {
+    setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))
+  }
+
+  const updateDescriptor = (id: string, value: string) => {
+    setDescriptors((prev) => prev.map((d) => (d.id === id ? { ...d, value } : d)))
+  }
+
   async function onSave() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl }
+      const el: NamedElement = {
+        id: elemId ?? genId(),
+        name: name.trim(),
+        shortDescription: shortDesc.trim(),
+        longDescription: longDesc,
+        avatarUrl,
+        descriptors,
+      }
       const next: StoryContent = {
         ...content,
         species: content.species.some((x) => x.id === el.id) ? content.species.map((x) => (x.id === el.id ? el : x)) : [el, ...content.species],
@@ -87,6 +107,44 @@ export default function SpeciesForm() {
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
             <MentionArea value={longDesc} onChange={setLongDesc} suggestions={suggestions} />
           </div>
+          <div style={{ color: 'var(--color-text)', fontWeight: 600, marginTop: 8 }}>Attributes</div>
+          <AttributePicker categories={getSpeciesCategories()} chosenKeys={descriptors.map((d) => d.key)} onAdd={addDescriptor} />
+
+          {getSpeciesCategories().map((cat) => {
+            const items = descriptors.filter((d) => cat.items.some((i) => i.key === d.key))
+            if (items.length === 0) return null
+            return (
+              <Disclosure key={cat.title} title={cat.title} defaultOpen>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {items.map((d) => {
+                    const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
+                    if (d.key === 'images') {
+                      return (
+                        <ImagesField
+                          key={d.id}
+                          label={label}
+                          value={d.value}
+                          onChange={(next) => updateDescriptor(d.id, next)}
+                          mainImageUrl={avatarUrl}
+                        />
+                      )
+                    }
+                    return (
+                      <MentionArea
+                        key={d.id}
+                        label={label}
+                        value={d.value}
+                        onChange={(v) => updateDescriptor(d.id, v)}
+                        suggestions={suggestions}
+                        minHeight={40}
+                      />
+                    )
+                  })}
+                </div>
+              </Disclosure>
+            )
+          })}
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>
               Cancel
@@ -99,4 +157,13 @@ export default function SpeciesForm() {
       </Card>
     </div>
   )
+}
+
+function getSpeciesCategories(): { title: string; items: { key: DescriptorKey; label: string }[] }[] {
+  return [
+    {
+      title: 'Media',
+      items: [{ key: 'images', label: 'Images' }],
+    },
+  ]
 }

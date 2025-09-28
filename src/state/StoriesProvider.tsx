@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { Story } from '../types'
 import { useAuth } from '../auth/AuthProvider'
 import { StoriesRemote, isRemoteConfigured } from '../lib/storiesService'
-import { emptyStoryContent, type StoryContent, type Character, type Descriptor } from '../types'
+import { emptyStoryContent, type StoryContent, type Character, type Descriptor, type DescriptorKey } from '../types'
+import { parseImageValue, stringifyImageValue } from '../lib/descriptorImages'
 
 type StoriesContextValue = {
   stories: Story[]
@@ -39,14 +40,25 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
   const fileIdsRef = useRef<Record<string, string>>({})
   const localContentKey = (sid: string) => `${STORAGE_KEY}:content:${sid}`
 
+  const normalizeDescriptor = (raw: any): Descriptor => {
+    const key = (raw?.key ?? 'notes') as DescriptorKey
+    const id = String(raw?.id ?? genId())
+    const rawValue = raw?.value
+    let value = ''
+    if (key === 'images') {
+      value = stringifyImageValue(parseImageValue(rawValue))
+    } else if (typeof rawValue === 'string') {
+      value = rawValue
+    } else if (rawValue != null) {
+      value = String(rawValue)
+    }
+    return { id, key, value }
+  }
+
   function normalizeContent(raw: any): StoryContent {
     const asArray = (x: any) => (Array.isArray(x) ? x : [])
     const chars = asArray(raw?.characters).map((c: any) => {
-      const descs = asArray(c?.descriptors).map((d: any) => ({
-        id: String(d?.id ?? genId()),
-        key: d?.key ?? 'notes',
-        value: String(d?.value ?? ''),
-      })) as Descriptor[]
+      const descs = asArray(c?.descriptors).map(normalizeDescriptor) as Descriptor[]
       return {
         id: String(c?.id ?? genId()),
         name: String(c?.name ?? ''),
@@ -59,14 +71,21 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
     })
     const norm: StoryContent = {
       characters: chars,
-      species: asArray(raw?.species).map((s: any) => ({ id: String(s?.id ?? genId()), name: String(s?.name ?? ''), shortDescription: s?.shortDescription ? String(s.shortDescription) : undefined, longDescription: s?.longDescription ? String(s.longDescription) : undefined, avatarUrl: s?.avatarUrl ? String(s.avatarUrl) : undefined })),
+      species: asArray(raw?.species).map((s: any) => ({
+        id: String(s?.id ?? genId()),
+        name: String(s?.name ?? ''),
+        shortDescription: s?.shortDescription ? String(s.shortDescription) : undefined,
+        longDescription: s?.longDescription ? String(s.longDescription) : undefined,
+        avatarUrl: s?.avatarUrl ? String(s.avatarUrl) : undefined,
+        descriptors: asArray(s?.descriptors).map(normalizeDescriptor),
+      })),
       locations: asArray(raw?.locations ?? raw?.places).map((p: any) => ({
         id: String(p?.id ?? genId()),
         name: String(p?.name ?? ''),
         shortDescription: p?.shortDescription ? String(p.shortDescription) : undefined,
         longDescription: p?.longDescription ? String(p.longDescription) : undefined,
         avatarUrl: p?.avatarUrl ? String(p.avatarUrl) : undefined,
-        descriptors: asArray(p?.descriptors).map((d: any) => ({ id: String(d?.id ?? genId()), key: d?.key ?? 'notes', value: String(d?.value ?? '') })),
+        descriptors: asArray(p?.descriptors).map(normalizeDescriptor),
       })),
       groups: asArray(raw?.groups).map((g: any) => ({
         id: String(g?.id ?? genId()),
@@ -74,7 +93,7 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
         shortDescription: g?.shortDescription ? String(g.shortDescription) : undefined,
         longDescription: g?.longDescription ? String(g.longDescription) : undefined,
         avatarUrl: g?.avatarUrl ? String(g.avatarUrl) : undefined,
-        descriptors: asArray(g?.descriptors).map((d: any) => ({ id: String(d?.id ?? genId()), key: d?.key ?? 'notes', value: String(d?.value ?? '') })),
+        descriptors: asArray(g?.descriptors).map(normalizeDescriptor),
       })),
       languages: asArray(raw?.languages).map((l: any) => ({ id: String(l?.id ?? genId()), name: String(l?.name ?? ''), shortDescription: l?.shortDescription ? String(l.shortDescription) : undefined, longDescription: l?.longDescription ? String(l.longDescription) : undefined, avatarUrl: l?.avatarUrl ? String(l.avatarUrl) : undefined })),
       items: asArray(raw?.items).map((i: any) => ({ id: String(i?.id ?? genId()), name: String(i?.name ?? ''), shortDescription: i?.shortDescription ? String(i.shortDescription) : undefined, longDescription: i?.longDescription ? String(i.longDescription) : undefined, avatarUrl: i?.avatarUrl ? String(i.avatarUrl) : undefined })),

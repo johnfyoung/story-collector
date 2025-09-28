@@ -11,8 +11,9 @@ import type { Character, Descriptor, DescriptorKey, StoryContent } from '../type
 import { Disclosure } from '../components/Disclosure'
 import { Scale } from '../components/Scale'
 import { AttributePicker } from '../components/AttributePicker'
+import { ImagesField } from '../components/ImagesField'
 
-type AttrMeta = { key: DescriptorKey; label: string; type: 'short' | 'long' | 'scale5' | 'scale10' }
+type AttrMeta = { key: DescriptorKey; label: string; type: 'short' | 'long' | 'scale5' | 'scale10' | 'media' }
 const PROFILE_ATTRS: AttrMeta[] = [
   { key: 'species', label: 'Species', type: 'short' },
   { key: 'age', label: 'Age', type: 'short' },
@@ -149,6 +150,10 @@ const STORY_ATTRS: AttrMeta[] = [
   { key: 'longTermGoals', label: 'Long term goals', type: 'long' },
 ]
 
+const MEDIA_ATTRS: AttrMeta[] = [
+  { key: 'images', label: 'Images', type: 'media' },
+]
+
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
@@ -265,12 +270,13 @@ export default function CharacterForm() {
               { title: 'Social', items: SOCIAL_ATTRS.map(({ key, label }) => ({ key, label })) },
               { title: 'Communication', items: COMMUNICATION_ATTRS.map(({ key, label }) => ({ key, label })) },
               { title: 'Story', items: STORY_ATTRS.map(({ key, label }) => ({ key, label })) },
+              { title: 'Media', items: MEDIA_ATTRS.map(({ key, label }) => ({ key, label })) },
             ]}
             chosenKeys={descriptors.map((d) => d.key)}
             onAdd={addDescriptor}
           />
           {/* Attribute inputs grouped by category & collapsible when present */}
-          {[{ title: 'Profile', attrs: PROFILE_ATTRS }, { title: 'Appearance', attrs: APPEARANCE_ATTRS }, { title: 'Personality', attrs: PERSONALITY_ATTRS }, { title: 'Background', attrs: BACKGROUND_ATTRS }, { title: 'Abilities', attrs: ABILITIES_ATTRS }, { title: 'Lifestyle', attrs: LIFESTYLE_ATTRS }, { title: 'Social', attrs: SOCIAL_ATTRS }, { title: 'Communication', attrs: COMMUNICATION_ATTRS }, { title: 'Story', attrs: STORY_ATTRS }]
+          {[{ title: 'Profile', attrs: PROFILE_ATTRS }, { title: 'Appearance', attrs: APPEARANCE_ATTRS }, { title: 'Personality', attrs: PERSONALITY_ATTRS }, { title: 'Background', attrs: BACKGROUND_ATTRS }, { title: 'Abilities', attrs: ABILITIES_ATTRS }, { title: 'Lifestyle', attrs: LIFESTYLE_ATTRS }, { title: 'Social', attrs: SOCIAL_ATTRS }, { title: 'Communication', attrs: COMMUNICATION_ATTRS }, { title: 'Story', attrs: STORY_ATTRS }, { title: 'Media', attrs: MEDIA_ATTRS }]
             .map((group) => {
               const items = descriptors.filter((d) => group.attrs.some((a) => a.key === d.key))
               if (items.length === 0) return null
@@ -278,17 +284,28 @@ export default function CharacterForm() {
                 <Disclosure key={group.title} title={group.title} defaultOpen>
                   <div style={{ display: 'grid', gap: 10 }}>
                     {items.map((d) => {
-                      const meta = group.attrs.find((a) => a.key === d.key)!
-                      const label = meta.label
-                      if (meta.type === 'scale5' || meta.type === 'scale10') {
-                        const max = meta.type === 'scale5' ? 5 : 10
-                        return (
-                          <Scale key={d.id} label={label} max={max} value={d.value} onChange={(n) => updateDescriptor(d.id, String(n))} />
-                        )
-                      }
-                      // mention-enabled short fields
-                      const mentionKeys: DescriptorKey[] = ['species','birthplace','pets','children','significantOther','spouse','allies','enemies','familyMembers','relationships']
-                      const isMention = mentionKeys.includes(d.key)
+                    const meta = group.attrs.find((a) => a.key === d.key)!
+                    const label = meta.label
+                    if (meta.type === 'scale5' || meta.type === 'scale10') {
+                      const max = meta.type === 'scale5' ? 5 : 10
+                      return (
+                        <Scale key={d.id} label={label} max={max} value={d.value} onChange={(n) => updateDescriptor(d.id, String(n))} />
+                      )
+                    }
+                    if (meta.type === 'media') {
+                      return (
+                        <ImagesField
+                          key={d.id}
+                          label={label}
+                          value={d.value}
+                          onChange={(next) => updateDescriptor(d.id, next)}
+                          mainImageUrl={avatarUrl}
+                        />
+                      )
+                    }
+                    // mention-enabled short fields
+                    const mentionKeys: DescriptorKey[] = ['species','birthplace','pets','children','significantOther','spouse','allies','enemies','familyMembers','relationships']
+                    const isMention = mentionKeys.includes(d.key)
                       if (isMention) {
                         const sugg = d.key === 'birthplace' ? locationsIndex : d.key === 'species' ? speciesIndex : charactersIndex
                         return (

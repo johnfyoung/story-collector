@@ -8,6 +8,8 @@ export type Story = {
 export type DescriptorKey =
   // Baseline
   | 'height' | 'weight' | 'species' | 'familyMembers' | 'affiliation' | 'notes'
+  // Media
+  | 'images'
   // Profile
   | 'age' | 'gender' | 'birthday' | 'birthplace' | 'nicknames' | 'pets' | 'children' | 'maritalStatus' | 'dominantHand' | 'pronouns'
   // Appearance
