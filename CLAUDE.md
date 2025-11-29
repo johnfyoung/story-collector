@@ -1,6 +1,6 @@
 # Story Collector - Project Context
 
-A React-based story/world-building application that helps writers organize characters, locations, species, and plot points with rich attribute systems and cloud sync.
+A React-based story/world-building application that helps writers organize characters, locations, species, and plot lines with rich attribute systems and cloud sync.
 
 ## Technology Stack
 
@@ -54,8 +54,41 @@ StoryContent (Full Content - stored as JSON)
 ├── groups: NamedElement[]
 ├── languages: NamedElement[]
 ├── items: NamedElement[]
-└── plotPoints: PlotPoint[]
+└── plotLines: PlotLine[]
 ```
+
+### Plot Line Structure
+```typescript
+PlotLine
+├── id: string
+├── title: string
+├── description?: string
+└── chapters: Chapter[]
+    └── Chapter
+        ├── id: string
+        ├── title: string
+        ├── description?: string
+        ├── order: number
+        └── plotPoints: PlotPoint[]
+            └── PlotPoint
+                ├── id: string
+                ├── title: string
+                ├── aiPrompt?: string
+                ├── storyElements?: string  // @mention-enabled field
+                └── order: number
+```
+
+**Plot Lines Features:**
+- Organize story plot into structured plot lines
+- Each plot line contains ordered chapters
+- Each chapter contains ordered plot points in a timeline
+- Plot points include:
+  - Title for the event/scene
+  - AI Prompt field with @mention support for referencing story elements
+  - Story Elements field with @mention support to tag relevant characters, locations, etc.
+  - Order field for sequencing within chapters
+- Drag/reorder chapters and plot points using up/down buttons
+- Full @mention integration - type @ to reference any character, location, species, group, item, or language
 
 ### Character/NamedElement Structure
 ```typescript
@@ -123,7 +156,8 @@ The descriptor system is the core of flexible data modeling. Categories include:
 │   ├── Groups.tsx
 │   ├── Languages.tsx
 │   ├── Items.tsx
-│   └── PlotPoints.tsx
+│   ├── PlotLines.tsx         # Plot lines list
+│   └── PlotLineForm.tsx      # Create/edit plot lines with chapters & plot points
 ├── state/
 │   └── StoriesProvider.tsx   # Global stories state & API
 ├── theme/
@@ -175,7 +209,9 @@ The descriptor system is the core of flexible data modeling. Categories include:
 /stories/:id/groups                 - Groups
 /stories/:id/items                  - Items
 /stories/:id/languages              - Languages
-/stories/:id/plot-points            - Plot points
+/stories/:id/plot-lines             - Plot lines list
+/stories/:id/plot-lines/new         - Create plot line
+/stories/:id/plot-lines/:id/edit    - Edit plot line with chapters & points
 ```
 
 ### Component Styling
@@ -257,6 +293,28 @@ Optional Cloudinary config for image uploads.
 - **REMEMBER** localStorage has size limits (~5-10MB) - monitor story size
 
 ## Recent Additions
+
+### 2025-11-29: Plot Lines UI
+- **Complete plot line management system** replacing simple plot points
+- **New types** in `types.ts`:
+  - `PlotLine`: Container for chapters with title and description
+  - `Chapter`: Ordered container for plot points with title, description, and order field
+  - `PlotPoint`: Individual story events with title, aiPrompt, storyElements, and order
+- **New components**:
+  - `PlotLines.tsx`: List view showing all plot lines with chapter/point counts
+  - `PlotLineForm.tsx`: Comprehensive nested form for managing plot lines, chapters, and plot points
+- **Features**:
+  - Hierarchical structure: Plot Lines → Chapters → Plot Points
+  - @mention support in all description fields (AI Prompt and Story Elements)
+  - Reordering capability with up/down buttons for both chapters and plot points
+  - Add/remove chapters and plot points dynamically
+  - Each plot point includes:
+    - Title field
+    - AI Prompt field (for generating scenes/content)
+    - Story Elements field (for tagging relevant characters, locations, etc.)
+- **Data migration**: Old `plotPoints` array automatically migrates to new `plotLines` structure
+- **Routing**: Changed from `/plot-points` to `/plot-lines`
+- **UI updates**: Button text changed from "Plot points" to "Plot lines" throughout app
 
 ### 2025-11-29: JSON Export
 - Added export button to `StoryView.tsx`
