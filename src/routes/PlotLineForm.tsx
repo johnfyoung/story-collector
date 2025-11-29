@@ -47,7 +47,6 @@ export default function PlotLineForm() {
     for (const i of content.items) if (i.name) idx.push(i.name)
     for (const g of content.groups) if (g.name) idx.push(g.name)
     for (const l of content.languages) if (l.name) idx.push(l.name)
-    console.log('PlotLineForm elementsIndex:', idx)
     return idx
   }, [content])
 
