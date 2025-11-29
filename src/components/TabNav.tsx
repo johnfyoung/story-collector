@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 type Tab = { label: string; to: string }
 
-export function TabNav({ active, storyId }: { active: 'characters' | 'groups' | 'locations' | 'species' | 'items' | 'languages' | 'plot-points'; storyId: string }) {
+export function TabNav({ active, storyId }: { active: 'characters' | 'groups' | 'locations' | 'species' | 'items' | 'languages' | 'plot-lines'; storyId: string }) {
   const tabs: Tab[] = [
     { label: 'Characters', to: `/stories/${storyId}/characters` },
     { label: 'Groups', to: `/stories/${storyId}/groups` },
@@ -10,7 +10,7 @@ export function TabNav({ active, storyId }: { active: 'characters' | 'groups' | 
     { label: 'Species', to: `/stories/${storyId}/species` },
     { label: 'Items', to: `/stories/${storyId}/items` },
     { label: 'Languages', to: `/stories/${storyId}/languages` },
-    { label: 'Plot points', to: `/stories/${storyId}/plot-points` },
+    { label: 'Plot lines', to: `/stories/${storyId}/plot-lines` },
   ]
 
   return (

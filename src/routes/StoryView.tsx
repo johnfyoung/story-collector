@@ -92,7 +92,7 @@ export default function StoryView() {
           <Link to={`/stories/${story.id}/species`} style={linkStyle}>Species</Link>
           <Link to={`/stories/${story.id}/items`} style={linkStyle}>Items</Link>
           <Link to={`/stories/${story.id}/languages`} style={linkStyle}>Languages</Link>
-          <Link to={`/stories/${story.id}/plot-points`} style={linkStyle}>Plot points</Link>
+          <Link to={`/stories/${story.id}/plot-lines`} style={linkStyle}>Plot lines</Link>
         </nav>
       </Card>
     </div>

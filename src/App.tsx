@@ -6,7 +6,8 @@ import Characters from './routes/Characters'
 import CharacterForm from './routes/CharacterForm'
 import Locations from './routes/Locations'
 import Items from './routes/Items'
-import PlotPoints from './routes/PlotPoints'
+import PlotLines from './routes/PlotLines'
+import PlotLineForm from './routes/PlotLineForm'
 import Species from './routes/Species'
 import Groups from './routes/Groups'
 import Languages from './routes/Languages'
@@ -57,7 +58,9 @@ export default function App() {
             <Route path=":id/languages" element={<Languages />} />
             <Route path=":id/languages/new" element={<LanguageForm />} />
             <Route path=":id/languages/:elemId/edit" element={<LanguageForm />} />
-            <Route path=":id/plot-points" element={<PlotPoints />} />
+            <Route path=":id/plot-lines" element={<PlotLines />} />
+            <Route path=":id/plot-lines/new" element={<PlotLineForm />} />
+            <Route path=":id/plot-lines/:plotLineId/edit" element={<PlotLineForm />} />
           </Route>
         </Route>
       </Route>

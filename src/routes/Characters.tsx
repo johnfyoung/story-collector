@@ -29,7 +29,7 @@ export default function Characters() {
   //   for (const i of content.items) if (i.name) idx.push(i.name);
   //   for (const g of content.groups) if (g.name) idx.push(g.name);
   //   for (const l of content.languages) if (l.name) idx.push(l.name);
-  //   for (const pl of content.plotPoints) if (pl.title) idx.push(pl.title);
+  //   for (const pl of content.plotLines) if (pl.title) idx.push(pl.title);
   //   return idx;
   // }, [content]);
 
