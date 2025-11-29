@@ -13,7 +13,7 @@ export type DescriptorKey =
   // Profile
   | 'age' | 'gender' | 'birthday' | 'birthplace' | 'nicknames' | 'pets' | 'children' | 'maritalStatus' | 'dominantHand' | 'pronouns'
   // Appearance
-  | 'ethnicity' | 'bodyType' | 'skinTone' | 'eyeColor' | 'hairColor' | 'hairstyle' | 'distinguishingFeature' | 'otherFacialFeatures' | 'tattoos' | 'scars' | 'clothingStyle' | 'accessories'
+  | 'ethnicity' | 'bodyType' | 'skinTone' | 'eyeColor' | 'hairColor' | 'hairstyle' | 'distinguishingFeature' | 'otherFacialFeatures' | 'tattoos' | 'scars' | 'clothingStyle' | 'accessories' | 'aiImagePrompt'
   // Personality (Big Five scales + text)
   | 'extroversion' | 'agreeableness' | 'conscientiousness' | 'openness' | 'neuroticism'
   | 'moral' | 'confidenceLevel' | 'selfControl' | 'truthfulness' | 'manners' | 'motivation' | 'discouragement' | 'greatestFear' | 'sex' | 'sexualOrientation' | 'bias' | 'addictions' | 'secrets'

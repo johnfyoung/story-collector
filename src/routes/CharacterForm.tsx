@@ -43,6 +43,7 @@ const APPEARANCE_ATTRS: AttrMeta[] = [
   { key: 'scars', label: 'Scars', type: 'long' },
   { key: 'clothingStyle', label: 'Clothing style', type: 'long' },
   { key: 'accessories', label: 'Accessories', type: 'long' },
+  { key: 'aiImagePrompt', label: 'AI Image Prompt', type: 'long' },
 ]
 
 const PERSONALITY_ATTRS: AttrMeta[] = [
@@ -300,6 +301,15 @@ export default function CharacterForm() {
                           value={d.value}
                           onChange={(next) => updateDescriptor(d.id, next)}
                           mainImageUrl={avatarUrl}
+                          character={{ name, shortDescription: shortDesc, descriptors }}
+                          onPromptSave={(prompt) => {
+                            const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
+                            if (aiPromptDescriptor) {
+                              updateDescriptor(aiPromptDescriptor.id, prompt)
+                            } else {
+                              setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                            }
+                          }}
                         />
                       )
                     }
