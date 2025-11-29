@@ -7,8 +7,30 @@ import type { CSSProperties } from 'react'
 export default function StoryView() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { get, remove } = useStories()
+  const { get, remove, loadContent } = useStories()
   const story = id ? get(id) : undefined
+
+  const handleExport = async () => {
+    if (!id || !story) return
+
+    try {
+      const content = await loadContent(id)
+      const jsonString = JSON.stringify(content, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${story.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to export story', error)
+      alert('Failed to export story')
+    }
+  }
 
   if (!story) {
     return <div style={{ color: 'var(--color-text)' }}>Story not found.</div>
@@ -21,6 +43,20 @@ export default function StoryView() {
         <IconButton aria-label="Edit story" onClick={() => navigate(`/stories/${story.id}/edit`)} title="Edit">
           ✏️
         </IconButton>
+        <button
+          onClick={handleExport}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '6px 10px',
+            color: 'var(--color-text)',
+            cursor: 'pointer',
+          }}
+          title="Export story as JSON"
+        >
+          Export JSON
+        </button>
         <button
           onClick={async () => {
             if (!id) return
