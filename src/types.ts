@@ -75,6 +75,29 @@ export type Character = {
 
 export type NamedElement = { id: string; name: string; shortDescription?: string; longDescription?: string; avatarUrl?: string; descriptors?: Descriptor[] }
 
+export type PlotPoint = {
+  id: string
+  title: string
+  aiPrompt?: string
+  storyElements?: string
+  order: number
+}
+
+export type Chapter = {
+  id: string
+  title: string
+  description?: string
+  plotPoints: PlotPoint[]
+  order: number
+}
+
+export type PlotLine = {
+  id: string
+  title: string
+  description?: string
+  chapters: Chapter[]
+}
+
 export type StoryContent = {
   characters: Character[]
   species: NamedElement[]
@@ -82,7 +105,7 @@ export type StoryContent = {
   groups: NamedElement[]
   languages: NamedElement[]
   items: NamedElement[]
-  plotPoints: Array<{ id: string; title: string; description?: string }>
+  plotLines: PlotLine[]
 }
 
 export const emptyStoryContent: StoryContent = {
@@ -92,5 +115,5 @@ export const emptyStoryContent: StoryContent = {
   groups: [],
   languages: [],
   items: [],
-  plotPoints: [],
+  plotLines: [],
 }

@@ -97,7 +97,24 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
       })),
       languages: asArray(raw?.languages).map((l: any) => ({ id: String(l?.id ?? genId()), name: String(l?.name ?? ''), shortDescription: l?.shortDescription ? String(l.shortDescription) : undefined, longDescription: l?.longDescription ? String(l.longDescription) : undefined, avatarUrl: l?.avatarUrl ? String(l.avatarUrl) : undefined })),
       items: asArray(raw?.items).map((i: any) => ({ id: String(i?.id ?? genId()), name: String(i?.name ?? ''), shortDescription: i?.shortDescription ? String(i.shortDescription) : undefined, longDescription: i?.longDescription ? String(i.longDescription) : undefined, avatarUrl: i?.avatarUrl ? String(i.avatarUrl) : undefined })),
-      plotPoints: asArray(raw?.plotPoints).map((pp: any) => ({ id: String(pp?.id ?? genId()), title: String(pp?.title ?? pp?.name ?? ''), description: pp?.description ? String(pp.description) : undefined })),
+      plotLines: asArray(raw?.plotLines ?? raw?.plotPoints).map((pl: any) => ({
+        id: String(pl?.id ?? genId()),
+        title: String(pl?.title ?? ''),
+        description: pl?.description ? String(pl.description) : undefined,
+        chapters: asArray(pl?.chapters).map((ch: any) => ({
+          id: String(ch?.id ?? genId()),
+          title: String(ch?.title ?? ''),
+          description: ch?.description ? String(ch.description) : undefined,
+          order: typeof ch?.order === 'number' ? ch.order : 0,
+          plotPoints: asArray(ch?.plotPoints).map((pp: any) => ({
+            id: String(pp?.id ?? genId()),
+            title: String(pp?.title ?? ''),
+            aiPrompt: pp?.aiPrompt ? String(pp.aiPrompt) : undefined,
+            storyElements: pp?.storyElements ? String(pp.storyElements) : undefined,
+            order: typeof pp?.order === 'number' ? pp.order : 0,
+          })),
+        })),
+      })),
     }
     return norm
   }
