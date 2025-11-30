@@ -7,20 +7,28 @@ import {
 } from '../lib/assets'
 import { shouldPreferDeviceUpload } from '../lib/deviceUploadPreference'
 import { parseImageValue, stringifyImageValue } from '../lib/descriptorImages'
+import { isOpenAIConfigured } from '../lib/openaiImageGen'
+import { ImageGeneratorDialog } from './ImageGeneratorDialog'
+import type { Character } from '../types'
 
 export function ImagesField({
   label,
   value,
   onChange,
   mainImageUrl,
+  character,
+  onPromptSave,
 }: {
   label: string
   value: string
   onChange: (nextValue: string) => void
   mainImageUrl?: string
+  character?: Pick<Character, 'name' | 'shortDescription' | 'descriptors'>
+  onPromptSave?: (prompt: string) => void
 }) {
   const { user } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [showAIDialog, setShowAIDialog] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const storedImages = useMemo(() => parseImageValue(value), [value])
@@ -92,11 +100,44 @@ export function ImagesField({
     updateImages(storedImages.filter((img) => img !== url))
   }
 
+  const handleAIGenerate = () => {
+    setShowAIDialog(true)
+  }
+
+  const handleAIImageGenerated = async (imageUrl: string, prompt: string) => {
+    setBusy(true)
+    try {
+      // Download the image from OpenAI's URL
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+
+      // Convert to File
+      const file = new File([blob], 'ai-generated.png', { type: 'image/png' })
+
+      // Upload to Cloudinary
+      const { href } = await uploadImage(file, user?.$id)
+
+      // Add to images list
+      updateImages([...storedImages, href])
+
+      // Save the prompt if callback provided
+      if (onPromptSave) {
+        onPromptSave(prompt)
+      }
+    } catch (error) {
+      console.error('Failed to upload AI-generated image', error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const canGenerateWithAI = isOpenAIConfigured() && character
+
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: '0 0 auto', color: 'var(--color-text)' }}>{label}</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={startUpload}
@@ -112,6 +153,23 @@ export function ImagesField({
           >
             {busy ? 'Uploading…' : 'Upload image'}
           </button>
+          {canGenerateWithAI && (
+            <button
+              type="button"
+              onClick={handleAIGenerate}
+              disabled={busy}
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--color-primary)',
+                color: '#fff',
+                padding: '6px 10px',
+                cursor: busy ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Generate with AI
+            </button>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -123,7 +181,7 @@ export function ImagesField({
       </div>
       {combinedImages.length === 0 ? (
         <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)' }}>
-          No images yet. Use “Upload image” to add one.
+          No images yet. Use "Upload image" to add one.
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -184,6 +242,14 @@ export function ImagesField({
             </div>
           ))}
         </div>
+      )}
+
+      {showAIDialog && character && (
+        <ImageGeneratorDialog
+          character={character}
+          onClose={() => setShowAIDialog(false)}
+          onImageGenerated={handleAIImageGenerated}
+        />
       )}
     </div>
   )

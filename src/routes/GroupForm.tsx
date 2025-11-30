@@ -156,6 +156,17 @@ export default function GroupForm() {
                             )
                           }
                           mainImageUrl={avatarUrl}
+                          character={{ name, shortDescription: shortDesc, descriptors }}
+                          onPromptSave={(prompt) => {
+                            const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
+                            if (aiPromptDescriptor) {
+                              setDescriptors((prev) =>
+                                prev.map((x) => (x.id === aiPromptDescriptor.id ? { ...x, value: prompt } : x))
+                              )
+                            } else {
+                              setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                            }
+                          }}
                         />
                       )
                     }
@@ -211,6 +222,7 @@ function getGroupCategories(): { title: string; items: { key: DescriptorKey; lab
     { title: 'Culture', items: [
       { key: 'flagOrSymbol', label: 'Flag or symbol' },
       { key: 'slogan', label: 'Slogan' },
+      { key: 'aiImagePrompt', label: 'AI Image Prompt' },
       { key: 'governmentSystem', label: 'Government system' },
       { key: 'socialHierarchy', label: 'Social hierarchy' },
       { key: 'culture', label: 'Culture' },

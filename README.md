@@ -13,6 +13,7 @@ A React-based story and world-building application that helps writers organize c
 - **Cloud Sync**: Multi-device synchronization via Appwrite backend
 - **Offline Support**: Local storage caching for offline access
 - **Image Support**: Upload and manage images via Cloudinary integration
+- **AI Image Generation**: Generate character portraits from appearance attributes using OpenAI DALL-E
 - **JSON Export**: Export complete story data as formatted JSON
 - **Theme Support**: Light and dark theme modes
 
@@ -60,7 +61,13 @@ VITE_APPWRITE_BUCKET_ID=your-bucket-id
 # Optional: Cloudinary for image uploads
 VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
 VITE_CLOUDINARY_UPLOAD_PRESET=your-preset
+
+# Optional: OpenAI for AI image generation
+VITE_OPENAI_API_KEY=sk-your-openai-api-key
+VITE_OPENAI_IMAGE_MODEL=dall-e-3
 ```
+
+See `.env.example` for a complete template.
 
 4. Start the development server:
 ```bash
@@ -212,6 +219,17 @@ Upload and manage images for characters and elements:
 - Integrated with Cloudinary for hosting
 - Images stored in descriptor system as serialized JSON
 
+### AI Image Generation
+
+Generate character portraits automatically from appearance attributes:
+- Click "Generate with AI" in the Images field (Media category)
+- Auto-generates prompt from appearance attributes (ethnicity, body type, hair color, eye color, etc.)
+- Customize the prompt, art style, quality, and size
+- Preview generated image before accepting
+- Generated image automatically uploaded to Cloudinary
+- Prompt saved to "AI Image Prompt" field for reference
+- Requires OpenAI API key (DALL-E 3 or DALL-E 2)
+
 ### Plot Line Management
 
 Organize your narrative structure:
@@ -268,6 +286,16 @@ Organize your narrative structure:
 - Access Appwrite through `StoriesProvider` API, not directly from components
 
 ## Recent Updates
+
+### 2025-11-29: AI Image Generation
+- Generate character portraits from appearance attributes using OpenAI DALL-E
+- Auto-builds prompts from ethnicity, body type, hair color, eye color, and other appearance descriptors
+- Customizable art styles: portrait, fantasy art, realistic photo, anime, oil painting, digital art
+- Quality options: standard or HD
+- Size options: square, landscape, or portrait
+- Preview before accepting
+- Generated images auto-uploaded to Cloudinary
+- Prompt saved to "AI Image Prompt" appearance attribute for reference
 
 ### 2025-11-29: Plot Lines UI
 - Complete plot line management system replacing simple plot points

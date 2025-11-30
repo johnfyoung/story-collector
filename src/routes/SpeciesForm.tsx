@@ -126,6 +126,15 @@ export default function SpeciesForm() {
                           value={d.value}
                           onChange={(next) => updateDescriptor(d.id, next)}
                           mainImageUrl={avatarUrl}
+                          character={{ name, shortDescription: shortDesc, descriptors }}
+                          onPromptSave={(prompt) => {
+                            const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
+                            if (aiPromptDescriptor) {
+                              updateDescriptor(aiPromptDescriptor.id, prompt)
+                            } else {
+                              setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                            }
+                          }}
                         />
                       )
                     }
@@ -161,6 +170,16 @@ export default function SpeciesForm() {
 
 function getSpeciesCategories(): { title: string; items: { key: DescriptorKey; label: string }[] }[] {
   return [
+    {
+      title: 'Appearance',
+      items: [
+        { key: 'bodyType', label: 'Body Type' },
+        { key: 'height', label: 'Height' },
+        { key: 'skinTone', label: 'Skin Tone' },
+        { key: 'distinguishingFeature', label: 'Distinguishing Features' },
+        { key: 'aiImagePrompt', label: 'AI Image Prompt' },
+      ],
+    },
     {
       title: 'Media',
       items: [{ key: 'images', label: 'Images' }],
