@@ -119,6 +119,17 @@ export default function LocationForm() {
                             )
                           }
                           mainImageUrl={avatarUrl}
+                          character={{ name, shortDescription: shortDesc, descriptors }}
+                          onPromptSave={(prompt) => {
+                            const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
+                            if (aiPromptDescriptor) {
+                              setDescriptors((prev) =>
+                                prev.map((x) => (x.id === aiPromptDescriptor.id ? { ...x, value: prompt } : x))
+                              )
+                            } else {
+                              setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                            }
+                          }}
                         />
                       )
                     }
@@ -177,6 +188,7 @@ function getLocationCategories(): { title: string; items: { key: DescriptorKey; 
       { key: 'landmarks', label: 'Landmarks' },
       { key: 'pollution', label: 'Pollution' },
       { key: 'naturalResources', label: 'Natural resources' },
+      { key: 'aiImagePrompt', label: 'AI Image Prompt' },
     ]},
     { title: 'Culture', items: [
       { key: 'languages', label: 'Languages' },

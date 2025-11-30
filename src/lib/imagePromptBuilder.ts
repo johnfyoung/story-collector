@@ -1,21 +1,26 @@
-import type { Character, Descriptor, DescriptorKey } from '../types'
+import type { Character, NamedElement, Descriptor, DescriptorKey } from '../types'
+
+type ElementWithDescriptors = Pick<Character, 'name' | 'shortDescription' | 'descriptors'> | Pick<NamedElement, 'name' | 'shortDescription' | 'descriptors'>
+
+type ElementType = 'character' | 'species' | 'location' | 'group' | 'auto'
 
 type PromptOptions = {
   style?: 'portrait' | 'fantasy-art' | 'realistic-photo' | 'anime' | 'oil-painting' | 'digital-art'
   quality?: 'standard' | 'high' | 'ultra'
   customSuffix?: string
+  elementType?: ElementType
 }
 
 /**
- * Builds an AI image generation prompt from character attributes
+ * Builds an AI image generation prompt from element attributes
  */
 export function buildImagePrompt(
-  character: Pick<Character, 'name' | 'shortDescription' | 'descriptors'>,
+  element: ElementWithDescriptors,
   options: PromptOptions = {}
 ): string {
-  const { style = 'portrait', quality = 'high', customSuffix } = options
+  const { style = 'portrait', quality = 'high', customSuffix, elementType = 'auto' } = options
 
-  const descriptors = character.descriptors ?? []
+  const descriptors = element.descriptors ?? []
   const parts: string[] = []
 
   // Check if there's already a saved AI prompt
@@ -24,17 +29,77 @@ export function buildImagePrompt(
     return existingPrompt.trim()
   }
 
+  // Auto-detect element type based on descriptors
+  const detectedType = elementType === 'auto' ? detectElementType(descriptors) : elementType
+
   // Style prefix
-  const stylePrefix = getStylePrefix(style)
+  const stylePrefix = getStylePrefix(style, detectedType)
   if (stylePrefix) {
     parts.push(stylePrefix)
   }
 
-  // Character name
-  if (character.name) {
-    parts.push(character.name)
+  // Element name
+  if (element.name) {
+    parts.push(element.name)
   }
 
+  // Build prompt based on element type
+  if (detectedType === 'character') {
+    buildCharacterPrompt(descriptors, parts)
+  } else if (detectedType === 'species') {
+    buildSpeciesPrompt(descriptors, parts)
+  } else if (detectedType === 'location') {
+    buildLocationPrompt(descriptors, parts)
+  } else if (detectedType === 'group') {
+    buildGroupPrompt(descriptors, parts)
+  }
+
+  // Short description
+  if (element.shortDescription) {
+    parts.push(element.shortDescription)
+  }
+
+  // Quality suffix
+  const qualitySuffix = getQualitySuffix(quality, style)
+  if (qualitySuffix) {
+    parts.push(qualitySuffix)
+  }
+
+  // Custom suffix
+  if (customSuffix) {
+    parts.push(customSuffix)
+  }
+
+  return parts.join('. ').replace(/\.\s*\./g, '.').trim()
+}
+
+/**
+ * Detects element type based on descriptors
+ */
+function detectElementType(descriptors: Descriptor[]): ElementType {
+  // Check for character-specific descriptors
+  if (descriptors.some((d) => ['age', 'gender', 'species'].includes(d.key))) {
+    return 'character'
+  }
+
+  // Check for location-specific descriptors
+  if (descriptors.some((d) => ['climate', 'biome', 'architecturalStyle', 'population'].includes(d.key))) {
+    return 'location'
+  }
+
+  // Check for group-specific descriptors
+  if (descriptors.some((d) => ['flagOrSymbol', 'slogan', 'members'].includes(d.key))) {
+    return 'group'
+  }
+
+  // Default to character (most common)
+  return 'character'
+}
+
+/**
+ * Builds prompt for character elements
+ */
+function buildCharacterPrompt(descriptors: Descriptor[], parts: string[]): void {
   // Profile info (species, age, gender)
   const profileParts: string[] = []
   const species = getDescriptorValue(descriptors, 'species')
@@ -112,24 +177,85 @@ export function buildImagePrompt(
   if (styleParts.length > 0) {
     parts.push(styleParts.join(' '))
   }
+}
 
-  // Short description
-  if (character.shortDescription) {
-    parts.push(character.shortDescription)
+/**
+ * Builds prompt for species elements
+ */
+function buildSpeciesPrompt(descriptors: Descriptor[], parts: string[]): void {
+  // Physical traits
+  const traits: string[] = []
+
+  const bodyType = getDescriptorValue(descriptors, 'bodyType')
+  if (bodyType) traits.push(`${bodyType.toLowerCase()} physique`)
+
+  const height = getDescriptorValue(descriptors, 'height')
+  if (height) traits.push(height.toLowerCase())
+
+  const skinTone = getDescriptorValue(descriptors, 'skinTone')
+  if (skinTone) traits.push(`${skinTone.toLowerCase()} skin`)
+
+  const distinguishing = getDescriptorValue(descriptors, 'distinguishingFeature')
+  if (distinguishing) traits.push(distinguishing.toLowerCase())
+
+  if (traits.length > 0) {
+    parts.push(traits.join(', '))
   }
 
-  // Quality suffix
-  const qualitySuffix = getQualitySuffix(quality, style)
-  if (qualitySuffix) {
-    parts.push(qualitySuffix)
+  // Add context
+  parts.push('typical specimen of the species')
+}
+
+/**
+ * Builds prompt for location elements
+ */
+function buildLocationPrompt(descriptors: Descriptor[], parts: string[]): void {
+  // Scene type based on architectural style or biome
+  const archStyle = getDescriptorValue(descriptors, 'architecturalStyle')
+  const biome = getDescriptorValue(descriptors, 'biome')
+  const climate = getDescriptorValue(descriptors, 'climate')
+
+  const sceneParts: string[] = []
+
+  if (archStyle) sceneParts.push(`${archStyle.toLowerCase()} architecture`)
+  if (biome) sceneParts.push(`${biome.toLowerCase()} biome`)
+  if (climate) sceneParts.push(`${climate.toLowerCase()} climate`)
+
+  // Landmarks and features
+  const landmarks = getDescriptorValue(descriptors, 'landmarks')
+  if (landmarks) sceneParts.push(landmarks.toLowerCase())
+
+  const bodiesOfWater = getDescriptorValue(descriptors, 'bodiesOfWater')
+  if (bodiesOfWater) sceneParts.push(bodiesOfWater.toLowerCase())
+
+  const feeling = getDescriptorValue(descriptors, 'feeling')
+  if (feeling) sceneParts.push(`${feeling.toLowerCase()} atmosphere`)
+
+  if (sceneParts.length > 0) {
+    parts.push(sceneParts.join(', '))
+  } else {
+    parts.push('landscape view')
+  }
+}
+
+/**
+ * Builds prompt for group elements
+ */
+function buildGroupPrompt(descriptors: Descriptor[], parts: string[]): void {
+  // Symbol and visual identity
+  const symbol = getDescriptorValue(descriptors, 'flagOrSymbol')
+  if (symbol) {
+    parts.push(`emblem featuring ${symbol.toLowerCase()}`)
+  } else {
+    parts.push('group emblem or banner')
   }
 
-  // Custom suffix
-  if (customSuffix) {
-    parts.push(customSuffix)
-  }
+  // Cultural elements
+  const culture = getDescriptorValue(descriptors, 'culture')
+  if (culture) parts.push(`${culture.toLowerCase()} style`)
 
-  return parts.join('. ').replace(/\.\s*\./g, '.').trim()
+  const slogan = getDescriptorValue(descriptors, 'slogan')
+  if (slogan) parts.push(`with motto: "${slogan}"`)
 }
 
 /**
@@ -148,21 +274,38 @@ function getDescriptorValue(
 /**
  * Gets the style prefix for the prompt
  */
-function getStylePrefix(style: PromptOptions['style']): string {
+function getStylePrefix(style: PromptOptions['style'], elementType: ElementType): string {
+  const isLocation = elementType === 'location'
+  const isGroup = elementType === 'group'
+
   switch (style) {
     case 'portrait':
+      if (isLocation) return 'Landscape view of'
+      if (isGroup) return 'Emblem of'
       return 'Portrait of'
     case 'fantasy-art':
+      if (isLocation) return 'Fantasy art landscape of'
+      if (isGroup) return 'Fantasy art emblem of'
       return 'Fantasy art portrait of'
     case 'realistic-photo':
+      if (isLocation) return 'Professional photograph of'
+      if (isGroup) return 'Detailed emblem of'
       return 'Professional photograph of'
     case 'anime':
+      if (isLocation) return 'Anime-style landscape of'
+      if (isGroup) return 'Anime-style emblem of'
       return 'Anime-style illustration of'
     case 'oil-painting':
+      if (isLocation) return 'Oil painting landscape of'
+      if (isGroup) return 'Oil painting emblem of'
       return 'Oil painting portrait of'
     case 'digital-art':
+      if (isLocation) return 'Digital art landscape of'
+      if (isGroup) return 'Digital art emblem of'
       return 'Digital art portrait of'
     default:
+      if (isLocation) return 'View of'
+      if (isGroup) return 'Emblem of'
       return 'Portrait of'
   }
 }
