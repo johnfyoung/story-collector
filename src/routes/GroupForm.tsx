@@ -157,6 +157,7 @@ export default function GroupForm() {
                           }
                           mainImageUrl={avatarUrl}
                           character={{ name, shortDescription: shortDesc, descriptors }}
+                          storyContent={content || undefined}
                           onPromptSave={(prompt) => {
                             const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
                             if (aiPromptDescriptor) {

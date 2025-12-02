@@ -302,6 +302,7 @@ export default function CharacterForm() {
                           onChange={(next) => updateDescriptor(d.id, next)}
                           mainImageUrl={avatarUrl}
                           character={{ name, shortDescription: shortDesc, descriptors }}
+                          storyContent={content || undefined}
                           onPromptSave={(prompt) => {
                             const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
                             if (aiPromptDescriptor) {
