@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Character } from '../types'
+import type { Character, StoryContent } from '../types'
 import { buildImagePrompt, validatePrompt } from '../lib/imagePromptBuilder'
 import {
   generateImage,
@@ -13,12 +13,14 @@ import { TextArea } from './TextArea'
 
 type ImageGeneratorDialogProps = {
   character: Pick<Character, 'name' | 'shortDescription' | 'descriptors'>
+  storyContent?: StoryContent
   onClose: () => void
   onImageGenerated: (imageUrl: string, prompt: string) => void
 }
 
 export function ImageGeneratorDialog({
   character,
+  storyContent,
   onClose,
   onImageGenerated,
 }: ImageGeneratorDialogProps) {
@@ -41,9 +43,10 @@ export function ImageGeneratorDialog({
     const initialPrompt = buildImagePrompt(character, {
       style,
       quality: quality === 'hd' ? 'ultra' : 'high',
+      storyContent,
     })
     setPrompt(initialPrompt)
-  }, [character, style, quality])
+  }, [character, style, quality, storyContent])
 
   const handleGenerate = async () => {
     setError(null)

@@ -1,4 +1,4 @@
-import type { Character, NamedElement, Descriptor, DescriptorKey } from '../types'
+import type { Character, NamedElement, Descriptor, DescriptorKey, StoryContent } from '../types'
 
 type ElementWithDescriptors = Pick<Character, 'name' | 'shortDescription' | 'descriptors'> | Pick<NamedElement, 'name' | 'shortDescription' | 'descriptors'>
 
@@ -9,16 +9,18 @@ type PromptOptions = {
   quality?: 'standard' | 'high' | 'ultra'
   customSuffix?: string
   elementType?: ElementType
+  storyContent?: StoryContent  // Add story content for linked element lookups
 }
 
 /**
  * Builds an AI image generation prompt from element attributes
+ * Supports linked elements - e.g., character species will pull in species descriptors
  */
 export function buildImagePrompt(
   element: ElementWithDescriptors,
   options: PromptOptions = {}
 ): string {
-  const { style = 'portrait', quality = 'high', customSuffix, elementType = 'auto' } = options
+  const { style = 'portrait', quality = 'high', customSuffix, elementType = 'auto', storyContent } = options
 
   const descriptors = element.descriptors ?? []
   const parts: string[] = []
@@ -31,6 +33,9 @@ export function buildImagePrompt(
 
   // Auto-detect element type based on descriptors
   const detectedType = elementType === 'auto' ? detectElementType(descriptors) : elementType
+
+  // Resolve linked elements and merge descriptors
+  const enrichedDescriptors = resolveLinkedDescriptors(descriptors, detectedType, storyContent)
 
   // Style prefix
   const stylePrefix = getStylePrefix(style, detectedType)
@@ -45,13 +50,13 @@ export function buildImagePrompt(
 
   // Build prompt based on element type
   if (detectedType === 'character') {
-    buildCharacterPrompt(descriptors, parts)
+    buildCharacterPrompt(enrichedDescriptors, parts)
   } else if (detectedType === 'species') {
-    buildSpeciesPrompt(descriptors, parts)
+    buildSpeciesPrompt(enrichedDescriptors, parts)
   } else if (detectedType === 'location') {
-    buildLocationPrompt(descriptors, parts)
+    buildLocationPrompt(enrichedDescriptors, parts)
   } else if (detectedType === 'group') {
-    buildGroupPrompt(descriptors, parts)
+    buildGroupPrompt(enrichedDescriptors, parts)
   }
 
   // Short description
@@ -94,6 +99,67 @@ function detectElementType(descriptors: Descriptor[]): ElementType {
 
   // Default to character (most common)
   return 'character'
+}
+
+/**
+ * Resolves linked elements and merges their descriptors
+ * For example, if a character has species="Dragon", look up Dragon and merge its descriptors
+ */
+function resolveLinkedDescriptors(
+  descriptors: Descriptor[],
+  elementType: ElementType,
+  storyContent?: StoryContent
+): Descriptor[] {
+  if (!storyContent) {
+    return descriptors
+  }
+
+  const merged = [...descriptors]
+  const existingKeys = new Set(descriptors.map((d) => d.key))
+
+  // For characters, resolve species link
+  if (elementType === 'character') {
+    const speciesName = getDescriptorValue(descriptors, 'species')
+    if (speciesName) {
+      const speciesElement = storyContent.species.find(
+        (s) => s.name.toLowerCase() === speciesName.toLowerCase()
+      )
+      if (speciesElement?.descriptors) {
+        // Merge species descriptors that don't exist in character
+        for (const speciesDesc of speciesElement.descriptors) {
+          // Only add appearance-related descriptors from species
+          const isAppearanceKey = [
+            'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
+            'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity'
+          ].includes(speciesDesc.key)
+
+          if (isAppearanceKey && !existingKeys.has(speciesDesc.key) && speciesDesc.value) {
+            merged.push({ ...speciesDesc })
+          }
+        }
+      }
+    }
+
+    // Resolve birthplace link
+    const birthplace = getDescriptorValue(descriptors, 'birthplace')
+    if (birthplace) {
+      const locationElement = storyContent.locations.find(
+        (l) => l.name.toLowerCase() === birthplace.toLowerCase()
+      )
+      if (locationElement?.descriptors) {
+        // Add context from birthplace if available
+        const architecturalStyle = getDescriptorValue(locationElement.descriptors || [], 'architecturalStyle')
+
+        if (architecturalStyle && !existingKeys.has('clothingStyle')) {
+          // Infer clothing style from birthplace architecture
+          const clothingHint = `${architecturalStyle} influenced attire`
+          merged.push({ id: 'inferred-clothing', key: 'clothingStyle', value: clothingHint })
+        }
+      }
+    }
+  }
+
+  return merged
 }
 
 /**

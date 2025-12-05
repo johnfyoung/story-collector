@@ -9,7 +9,7 @@ import { shouldPreferDeviceUpload } from '../lib/deviceUploadPreference'
 import { parseImageValue, stringifyImageValue } from '../lib/descriptorImages'
 import { isOpenAIConfigured } from '../lib/openaiImageGen'
 import { ImageGeneratorDialog } from './ImageGeneratorDialog'
-import type { Character } from '../types'
+import type { Character, StoryContent } from '../types'
 
 export function ImagesField({
   label,
@@ -17,6 +17,7 @@ export function ImagesField({
   onChange,
   mainImageUrl,
   character,
+  storyContent,
   onPromptSave,
 }: {
   label: string
@@ -24,6 +25,7 @@ export function ImagesField({
   onChange: (nextValue: string) => void
   mainImageUrl?: string
   character?: Pick<Character, 'name' | 'shortDescription' | 'descriptors'>
+  storyContent?: StoryContent
   onPromptSave?: (prompt: string) => void
 }) {
   const { user } = useAuth()
@@ -247,6 +249,7 @@ export function ImagesField({
       {showAIDialog && character && (
         <ImageGeneratorDialog
           character={character}
+          storyContent={storyContent}
           onClose={() => setShowAIDialog(false)}
           onImageGenerated={handleAIImageGenerated}
         />
