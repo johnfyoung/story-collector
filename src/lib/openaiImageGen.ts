@@ -4,7 +4,9 @@ const OPENAI_IMAGE_MODEL = import.meta.env.VITE_OPENAI_IMAGE_MODEL as
   | undefined
 
 type ImageSize = '1024x1024' | '1792x1024' | '1024x1792'
-type ImageQuality = 'standard' | 'hd'
+type DalleQuality = 'standard' | 'hd'
+type GptImageQuality = 'low' | 'medium' | 'high'
+type ImageQuality = DalleQuality | GptImageQuality
 type ImageModel = 'dall-e-2' | 'dall-e-3' | 'gpt-image-1'
 
 export type GenerateImageOptions = {
@@ -40,11 +42,12 @@ export async function generateImage(
     throw new Error('OpenAI API key is not configured')
   }
 
+  const model = options.model || (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3'
+
   const {
     prompt,
     size = '1024x1024',
-    quality = 'standard',
-    model = (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3',
+    quality = model === 'gpt-image-1' ? 'medium' : 'standard',
   } = options
 
   if (!prompt?.trim()) {
@@ -125,6 +128,17 @@ export function getDefaultModel(): ImageModel {
 }
 
 /**
+ * Gets available quality options for a given model
+ */
+export function getAvailableQualities(model: ImageModel): ImageQuality[] {
+  if (model === 'gpt-image-1') {
+    return ['low', 'medium', 'high']
+  }
+  // DALL-E 2 and DALL-E 3 use standard/hd
+  return ['standard', 'hd']
+}
+
+/**
  * Gets available sizes for a given model
  */
 export function getAvailableSizes(model: ImageModel): ImageSize[] {
@@ -150,13 +164,18 @@ export function estimateCost(
 
   if (model === 'gpt-image-1') {
     // gpt-image-1 pricing (as of Dec 2024)
-    if (quality === 'hd') {
+    // Uses low/medium/high quality instead of standard/hd
+    if (quality === 'high') {
       if (size === '1024x1024') return 0.08
       return 0.12 // 1792x1024 or 1024x1792
     }
-    // Standard quality
-    if (size === '1024x1024') return 0.04
-    return 0.08 // 1792x1024 or 1024x1792
+    if (quality === 'medium') {
+      if (size === '1024x1024') return 0.04
+      return 0.08 // 1792x1024 or 1024x1792
+    }
+    // Low quality
+    if (size === '1024x1024') return 0.02
+    return 0.04 // 1792x1024 or 1024x1792
   }
 
   // DALL-E 3 pricing
