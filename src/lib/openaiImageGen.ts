@@ -4,8 +4,10 @@ const OPENAI_IMAGE_MODEL = import.meta.env.VITE_OPENAI_IMAGE_MODEL as
   | undefined
 
 type ImageSize = '1024x1024' | '1792x1024' | '1024x1792'
-type ImageQuality = 'standard' | 'hd'
-type ImageModel = 'dall-e-2' | 'dall-e-3'
+type DalleQuality = 'standard' | 'hd'
+type GptImageQuality = 'low' | 'medium' | 'high'
+type ImageQuality = DalleQuality | GptImageQuality
+type ImageModel = 'dall-e-2' | 'dall-e-3' | 'gpt-image-1'
 
 export type GenerateImageOptions = {
   prompt: string
@@ -40,11 +42,12 @@ export async function generateImage(
     throw new Error('OpenAI API key is not configured')
   }
 
+  const model = options.model || (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3'
+
   const {
     prompt,
     size = '1024x1024',
-    quality = 'standard',
-    model = (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3',
+    quality = model === 'gpt-image-1' ? 'medium' : 'standard',
   } = options
 
   if (!prompt?.trim()) {
@@ -58,8 +61,8 @@ export async function generateImage(
     size,
   }
 
-  // DALL-E 3 supports quality parameter
-  if (model === 'dall-e-3') {
+  // DALL-E 3 and gpt-image-1 support quality parameter
+  if (model === 'dall-e-3' || model === 'gpt-image-1') {
     requestBody.quality = quality
   }
 
@@ -101,12 +104,19 @@ export async function generateImage(
 
     const imageData = data.data[0]
 
-    if (!imageData.url) {
-      throw new Error('Image URL not found in response')
+    // Handle both URL and base64 responses
+    let imageUrl: string
+    if (imageData.url) {
+      imageUrl = imageData.url
+    } else if (imageData.b64_json) {
+      // Convert base64 to data URL
+      imageUrl = `data:image/png;base64,${imageData.b64_json}`
+    } else {
+      throw new Error('Image URL or data not found in response')
     }
 
     return {
-      url: imageData.url,
+      url: imageUrl,
       revisedPrompt: imageData.revised_prompt,
     }
   } catch (error) {
@@ -125,13 +135,24 @@ export function getDefaultModel(): ImageModel {
 }
 
 /**
+ * Gets available quality options for a given model
+ */
+export function getAvailableQualities(model: ImageModel): ImageQuality[] {
+  if (model === 'gpt-image-1') {
+    return ['low', 'medium', 'high']
+  }
+  // DALL-E 2 and DALL-E 3 use standard/hd
+  return ['standard', 'hd']
+}
+
+/**
  * Gets available sizes for a given model
  */
 export function getAvailableSizes(model: ImageModel): ImageSize[] {
   if (model === 'dall-e-2') {
     return ['1024x1024']
   }
-  // DALL-E 3 supports multiple sizes
+  // DALL-E 3 and gpt-image-1 support multiple sizes
   return ['1024x1024', '1792x1024', '1024x1792']
 }
 
@@ -146,6 +167,22 @@ export function estimateCost(
   if (model === 'dall-e-2') {
     // DALL-E 2 pricing
     return 0.016 // $0.016 per 1024x1024 image
+  }
+
+  if (model === 'gpt-image-1') {
+    // gpt-image-1 pricing (as of Dec 2024)
+    // Uses low/medium/high quality instead of standard/hd
+    if (quality === 'high') {
+      if (size === '1024x1024') return 0.08
+      return 0.12 // 1792x1024 or 1024x1792
+    }
+    if (quality === 'medium') {
+      if (size === '1024x1024') return 0.04
+      return 0.08 // 1792x1024 or 1024x1792
+    }
+    // Low quality
+    if (size === '1024x1024') return 0.02
+    return 0.04 // 1792x1024 or 1024x1792
   }
 
   // DALL-E 3 pricing

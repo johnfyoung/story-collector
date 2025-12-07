@@ -29,7 +29,6 @@ export function ImageGeneratorDialog({
   const [style, setStyle] = useState<
     'portrait' | 'fantasy-art' | 'realistic-photo' | 'anime' | 'oil-painting' | 'digital-art'
   >('portrait')
-  const [quality, setQuality] = useState<'standard' | 'hd'>('standard')
   const [size, setSize] = useState<'1024x1024' | '1792x1024' | '1024x1792'>('1024x1024')
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
   const [revisedPrompt, setRevisedPrompt] = useState<string | null>(null)
@@ -37,7 +36,12 @@ export function ImageGeneratorDialog({
   const [isGenerating, setIsGenerating] = useState(false)
 
   const model = getDefaultModel()
-  const estimatedCost = estimateCost(model, quality, size)
+
+  // Set default quality based on model
+  const defaultQuality = model === 'gpt-image-1' ? 'medium' : 'standard'
+  const [quality, setQuality] = useState<string>(defaultQuality)
+
+  const estimatedCost = estimateCost(model, quality as any, size)
 
   useEffect(() => {
     const initialPrompt = buildImagePrompt(character, {
@@ -64,7 +68,7 @@ export function ImageGeneratorDialog({
       const options: GenerateImageOptions = {
         prompt,
         size,
-        quality,
+        quality: quality as any,
         model,
       }
 
@@ -253,7 +257,7 @@ export function ImageGeneratorDialog({
                   </label>
                   <select
                     value={quality}
-                    onChange={(e) => setQuality(e.currentTarget.value as typeof quality)}
+                    onChange={(e) => setQuality(e.currentTarget.value)}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -263,8 +267,18 @@ export function ImageGeneratorDialog({
                       color: 'var(--color-text)',
                     }}
                   >
-                    <option value="standard">Standard</option>
-                    <option value="hd">HD (Higher Cost)</option>
+                    {model === 'gpt-image-1' ? (
+                      <>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High (Higher Cost)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="standard">Standard</option>
+                        <option value="hd">HD (Higher Cost)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -307,7 +321,12 @@ export function ImageGeneratorDialog({
                 }}
               >
                 <div style={{ color: 'var(--color-text)', fontSize: 'var(--font-sm)' }}>
-                  <strong>Model:</strong> {model === 'dall-e-3' ? 'DALL-E 3' : 'DALL-E 2'}
+                  <strong>Model:</strong>{' '}
+                  {model === 'dall-e-3'
+                    ? 'DALL-E 3'
+                    : model === 'gpt-image-1'
+                    ? 'GPT Image 1'
+                    : 'DALL-E 2'}
                 </div>
                 <div
                   style={{
