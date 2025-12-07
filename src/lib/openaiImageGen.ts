@@ -66,6 +66,11 @@ export async function generateImage(
     requestBody.quality = quality
   }
 
+  // gpt-image-1 requires response_format to get URLs
+  if (model === 'gpt-image-1') {
+    requestBody.response_format = 'url'
+  }
+
   try {
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -104,12 +109,19 @@ export async function generateImage(
 
     const imageData = data.data[0]
 
-    if (!imageData.url) {
-      throw new Error('Image URL not found in response')
+    // Handle both URL and base64 responses
+    let imageUrl: string
+    if (imageData.url) {
+      imageUrl = imageData.url
+    } else if (imageData.b64_json) {
+      // Convert base64 to data URL
+      imageUrl = `data:image/png;base64,${imageData.b64_json}`
+    } else {
+      throw new Error('Image URL or data not found in response')
     }
 
     return {
-      url: imageData.url,
+      url: imageUrl,
       revisedPrompt: imageData.revised_prompt,
     }
   } catch (error) {
