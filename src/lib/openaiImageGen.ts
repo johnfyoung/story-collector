@@ -66,11 +66,6 @@ export async function generateImage(
     requestBody.quality = quality
   }
 
-  // gpt-image-1 requires response_format to get URLs
-  if (model === 'gpt-image-1') {
-    requestBody.response_format = 'url'
-  }
-
   try {
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
