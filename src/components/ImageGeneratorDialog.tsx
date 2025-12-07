@@ -307,7 +307,12 @@ export function ImageGeneratorDialog({
                 }}
               >
                 <div style={{ color: 'var(--color-text)', fontSize: 'var(--font-sm)' }}>
-                  <strong>Model:</strong> {model === 'dall-e-3' ? 'DALL-E 3' : 'DALL-E 2'}
+                  <strong>Model:</strong>{' '}
+                  {model === 'dall-e-3'
+                    ? 'DALL-E 3'
+                    : model === 'gpt-image-1'
+                    ? 'GPT Image 1'
+                    : 'DALL-E 2'}
                 </div>
                 <div
                   style={{

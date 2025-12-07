@@ -5,7 +5,7 @@ const OPENAI_IMAGE_MODEL = import.meta.env.VITE_OPENAI_IMAGE_MODEL as
 
 type ImageSize = '1024x1024' | '1792x1024' | '1024x1792'
 type ImageQuality = 'standard' | 'hd'
-type ImageModel = 'dall-e-2' | 'dall-e-3'
+type ImageModel = 'dall-e-2' | 'dall-e-3' | 'gpt-image-1'
 
 export type GenerateImageOptions = {
   prompt: string
@@ -58,8 +58,8 @@ export async function generateImage(
     size,
   }
 
-  // DALL-E 3 supports quality parameter
-  if (model === 'dall-e-3') {
+  // DALL-E 3 and gpt-image-1 support quality parameter
+  if (model === 'dall-e-3' || model === 'gpt-image-1') {
     requestBody.quality = quality
   }
 
@@ -131,7 +131,7 @@ export function getAvailableSizes(model: ImageModel): ImageSize[] {
   if (model === 'dall-e-2') {
     return ['1024x1024']
   }
-  // DALL-E 3 supports multiple sizes
+  // DALL-E 3 and gpt-image-1 support multiple sizes
   return ['1024x1024', '1792x1024', '1024x1792']
 }
 
@@ -146,6 +146,17 @@ export function estimateCost(
   if (model === 'dall-e-2') {
     // DALL-E 2 pricing
     return 0.016 // $0.016 per 1024x1024 image
+  }
+
+  if (model === 'gpt-image-1') {
+    // gpt-image-1 pricing (as of Dec 2024)
+    if (quality === 'hd') {
+      if (size === '1024x1024') return 0.08
+      return 0.12 // 1792x1024 or 1024x1792
+    }
+    // Standard quality
+    if (size === '1024x1024') return 0.04
+    return 0.08 // 1792x1024 or 1024x1792
   }
 
   // DALL-E 3 pricing
