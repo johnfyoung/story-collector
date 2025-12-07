@@ -102,8 +102,42 @@ function detectElementType(descriptors: Descriptor[]): ElementType {
 }
 
 /**
+ * Extracts all @mentions from text
+ * Pattern matches: @Name, @Multi Word Name, etc.
+ */
+function extractMentions(text: string): string[] {
+  const mentionPattern = /@([A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*)(?=\s|$|[^A-Za-z0-9_-])/g
+  const mentions: string[] = []
+  let match
+  while ((match = mentionPattern.exec(text)) !== null) {
+    mentions.push(match[1].trim())
+  }
+  return mentions
+}
+
+/**
+ * Finds a story element by name across all element types
+ */
+function findElementByName(name: string, storyContent: StoryContent): NamedElement | Character | undefined {
+  const nameLower = name.toLowerCase()
+
+  // Search in order: characters, species, locations, groups, items, languages
+  const allElements = [
+    ...storyContent.characters,
+    ...storyContent.species,
+    ...storyContent.locations,
+    ...storyContent.groups,
+    ...storyContent.items,
+    ...storyContent.languages,
+  ]
+
+  return allElements.find((el) => el.name.toLowerCase() === nameLower)
+}
+
+/**
  * Resolves linked elements and merges their descriptors
  * For example, if a character has species="Dragon", look up Dragon and merge its descriptors
+ * Also extracts @mentions from text fields and includes their appearance descriptors
  */
 function resolveLinkedDescriptors(
   descriptors: Descriptor[],
@@ -117,7 +151,40 @@ function resolveLinkedDescriptors(
   const merged = [...descriptors]
   const existingKeys = new Set(descriptors.map((d) => d.key))
 
-  // For characters, resolve species link
+  // Extract all @mentions from all descriptor values
+  const allMentions = new Set<string>()
+  for (const descriptor of descriptors) {
+    if (descriptor.value && typeof descriptor.value === 'string') {
+      const mentions = extractMentions(descriptor.value)
+      mentions.forEach((m) => allMentions.add(m))
+    }
+  }
+
+  // Resolve @mentioned elements and merge their appearance descriptors
+  for (const mentionName of allMentions) {
+    const element = findElementByName(mentionName, storyContent)
+    if (element?.descriptors) {
+      // Add appearance/visual descriptors from mentioned element
+      for (const desc of element.descriptors) {
+        const isVisualKey = [
+          'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
+          'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity',
+          'clothingStyle', 'accessories', 'tattoos', 'scars',
+          // For locations
+          'architecturalStyle', 'landscape', 'climate',
+          // For species
+          'physiology', 'anatomy'
+        ].includes(desc.key)
+
+        if (isVisualKey && !existingKeys.has(desc.key) && desc.value) {
+          merged.push({ ...desc })
+          existingKeys.add(desc.key)
+        }
+      }
+    }
+  }
+
+  // For characters, resolve species link (direct descriptor, not @mention)
   if (elementType === 'character') {
     const speciesName = getDescriptorValue(descriptors, 'species')
     if (speciesName) {
@@ -135,6 +202,7 @@ function resolveLinkedDescriptors(
 
           if (isAppearanceKey && !existingKeys.has(speciesDesc.key) && speciesDesc.value) {
             merged.push({ ...speciesDesc })
+            existingKeys.add(speciesDesc.key)
           }
         }
       }
