@@ -77,7 +77,7 @@ export default function LanguageForm() {
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} />
+            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={[]} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <MentionArea label="Short description" value={shortDesc} onChange={(v) => setShortDesc(v)} suggestions={suggestions} maxChars={160} />

@@ -12,6 +12,7 @@ import { Disclosure } from '../components/Disclosure'
 import { Scale } from '../components/Scale'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
+import { parseImageValue } from '../lib/descriptorImages'
 
 type AttrMeta = { key: DescriptorKey; label: string; type: 'short' | 'long' | 'scale5' | 'scale10' | 'media' }
 const PROFILE_ATTRS: AttrMeta[] = [
@@ -207,6 +208,11 @@ export default function CharacterForm() {
   const locationsIndex = useMemo(() => (content ? content.locations.map((p) => p.name).filter(Boolean) : []), [content])
   const charactersIndex = useMemo(() => (content ? content.characters.map((c) => c.name).filter(Boolean) : []), [content])
 
+  const availableImages = useMemo(() => {
+    const imagesDescriptor = descriptors.find((d) => d.key === 'images')
+    return imagesDescriptor ? parseImageValue(imagesDescriptor.value) : []
+  }, [descriptors])
+
   function addDescriptor(key: DescriptorKey) {
     setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))
   }
@@ -248,7 +254,7 @@ export default function CharacterForm() {
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} />
+            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={availableImages} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Short name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <TextField label="Long name" value={longName} onChange={(e) => setLongName(e.currentTarget.value)} />

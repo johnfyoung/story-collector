@@ -1,56 +1,43 @@
-import { useRef, useState } from 'react'
-import { useAuth } from '../auth/AuthProvider'
-import {
-  uploadImage,
-  isCloudinaryConfigured,
-  openCloudinaryUploadWidget,
-} from '../lib/assets'
-import { shouldPreferDeviceUpload } from '../lib/deviceUploadPreference'
+import { useState } from 'react'
+import { ImagePicker } from './ImagePicker'
 
-export function Avatar({ name, url, size = 56, editable = false, onChange }: { name: string; url?: string; size?: number; editable?: boolean; onChange?: (nextUrl: string) => void }) {
-  const { user } = useAuth()
+export function Avatar({
+  name,
+  url,
+  size = 56,
+  editable = false,
+  onChange,
+  availableImages = [],
+}: {
+  name: string
+  url?: string
+  size?: number
+  editable?: boolean
+  onChange?: (nextUrl: string) => void
+  availableImages?: string[]
+}) {
   const [hover, setHover] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [showPicker, setShowPicker] = useState(false)
   const letter = (name?.trim()?.[0] || '?').toUpperCase()
 
-  const canUseCloudinary = isCloudinaryConfigured()
-
-  async function pickFile() {
-    if (!editable || busy) return
-    const preferDeviceUpload = canUseCloudinary && shouldPreferDeviceUpload()
-
-    if (canUseCloudinary && !preferDeviceUpload) {
-      setBusy(true)
-      try {
-        const uploaded = await openCloudinaryUploadWidget(user?.$id)
-        if (uploaded?.href) {
-          onChange?.(uploaded.href)
-        }
-      } catch (error) {
-        console.error('Failed to upload image with Cloudinary widget', error)
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
-    inputRef.current?.click()
+  const handleClick = () => {
+    if (!editable) return
+    setShowPicker(true)
   }
 
-  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.currentTarget.files?.[0]
-    if (!f) return
-    setBusy(true)
-    try {
-      const { href } = await uploadImage(f, user?.$id)
-      onChange?.(href)
-    } catch (error) {
-      console.error('Failed to upload image from device', error)
-    } finally {
-      setBusy(false)
-      e.currentTarget.value = ''
-    }
+  const handleImageSelect = (selectedUrl: string) => {
+    onChange?.(selectedUrl)
+    setShowPicker(false)
   }
+
+  // Combine current avatar URL with available images (deduplicated)
+  const allAvailableImages = (() => {
+    const images = [...availableImages]
+    if (url && !images.includes(url)) {
+      images.unshift(url) // Add current avatar at the beginning
+    }
+    return images
+  })()
 
   const style: React.CSSProperties = {
     position: 'relative',
@@ -81,24 +68,33 @@ export function Avatar({ name, url, size = 56, editable = false, onChange }: { n
   }
 
   return (
-    <div
-      style={style}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={pickFile}
-      title={editable ? (busy ? 'Uploading…' : 'Change avatar') : undefined}
-    >
-      {url ? (
-        <img
-          src={url}
-          alt={name ? `${name} avatar` : 'Avatar'}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+    <>
+      <div
+        style={style}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={handleClick}
+        title={editable ? 'Change avatar' : undefined}
+      >
+        {url ? (
+          <img
+            src={url}
+            alt={name ? `${name} avatar` : 'Avatar'}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <span aria-hidden>{letter}</span>
+        )}
+        <div style={overlay}>✎</div>
+      </div>
+
+      {showPicker && (
+        <ImagePicker
+          availableImages={allAvailableImages}
+          onSelect={handleImageSelect}
+          onClose={() => setShowPicker(false)}
         />
-      ) : (
-        <span aria-hidden>{letter}</span>
       )}
-      <div style={overlay}>{busy ? 'Uploading…' : '✎'}</div>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
-    </div>
+    </>
   )
 }

@@ -9,6 +9,7 @@ import { shouldPreferDeviceUpload } from '../lib/deviceUploadPreference'
 import { parseImageValue, stringifyImageValue } from '../lib/descriptorImages'
 import { isOpenAIConfigured } from '../lib/openaiImageGen'
 import { ImageGeneratorDialog } from './ImageGeneratorDialog'
+import { ImageModal } from './ImageModal'
 import type { Character, StoryContent } from '../types'
 
 export function ImagesField({
@@ -31,6 +32,7 @@ export function ImagesField({
   const { user } = useAuth()
   const [busy, setBusy] = useState(false)
   const [showAIDialog, setShowAIDialog] = useState(false)
+  const [viewingImage, setViewingImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const storedImages = useMemo(() => parseImageValue(value), [value])
@@ -203,7 +205,9 @@ export function ImagesField({
               <img
                 src={img.url}
                 alt={img.isMain ? 'Main image' : 'Supporting image'}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                onClick={() => setViewingImage(img.url)}
+                title="Click to view larger"
               />
               {img.isMain ? (
                 <div
@@ -252,6 +256,14 @@ export function ImagesField({
           storyContent={storyContent}
           onClose={() => setShowAIDialog(false)}
           onImageGenerated={handleAIImageGenerated}
+        />
+      )}
+
+      {viewingImage && (
+        <ImageModal
+          imageUrl={viewingImage}
+          alt="Image viewer"
+          onClose={() => setViewingImage(null)}
         />
       )}
     </div>

@@ -11,6 +11,7 @@ import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../t
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
+import { parseImageValue } from '../lib/descriptorImages'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -58,6 +59,11 @@ export default function SpeciesForm() {
     return idx
   }, [content])
 
+  const availableImages = useMemo(() => {
+    const imagesDescriptor = descriptors.find((d) => d.key === 'images')
+    return imagesDescriptor ? parseImageValue(imagesDescriptor.value) : []
+  }, [descriptors])
+
   const addDescriptor = (key: DescriptorKey) => {
     setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))
   }
@@ -97,7 +103,7 @@ export default function SpeciesForm() {
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} />
+            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={availableImages} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <MentionArea label="Short description" value={shortDesc} onChange={(v) => setShortDesc(v)} suggestions={suggestions} maxChars={160} />
