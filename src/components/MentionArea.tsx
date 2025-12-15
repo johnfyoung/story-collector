@@ -42,24 +42,7 @@ type MentionListProps = {
   command: (item: MentionItem) => void;
 };
 
-function resolveClientRect(props: SuggestionProps<MentionItem>): DOMRect {
-  const rect = props.clientRect?.();
-  if (rect) return rect;
-
-  const { view, state } = props.editor;
-  const from = state.selection.from;
-  const start = view.coordsAtPos(from);
-  const end = view.coordsAtPos(Math.min(from + 1, state.doc.content.size));
-
-  const top = Math.min(start.top, end.top);
-  const bottom = Math.max(start.bottom, end.bottom);
-  const left = Math.min(start.left, end.left);
-  const right = Math.max(start.right, end.right);
-  const height = Math.max(bottom - top, start.bottom - start.top, 14);
-  const width = Math.max(right - left, start.right - start.left, 1);
-
-  return new DOMRect(left, top, width, height);
-}
+const resolveClientRect = (props: SuggestionProps<MentionItem>) => props.clientRect?.();
 
 const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   function MentionList({ items, command }, ref) {
@@ -165,42 +148,46 @@ function createMentionExtension(items: MentionItem[]) {
       render: () => {
         let component: ReactRenderer | null = null;
         let popup: TippyInstance | null = null;
-        let lastRect: DOMRect | null = null;
+
+        const createPopup = (props: SuggestionProps<MentionItem>) => {
+          const clientRect = resolveClientRect(props);
+          if (!clientRect) return;
+
+          component = new ReactRenderer(MentionList, {
+            props,
+            editor: props.editor,
+          });
+
+          popup = tippy("body", {
+            getReferenceClientRect: clientRect,
+            appendTo: () => document.body,
+            content: component.element,
+            interactive: true,
+            trigger: "manual",
+            placement: "bottom-start",
+            animation: false,
+          });
+
+          popup.show();
+        };
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
-            const initialRect = resolveClientRect(props);
-            lastRect = initialRect;
-
-            component = new ReactRenderer(MentionList, {
-              props,
-              editor: props.editor,
-            });
-
-            popup = tippy(document.body, {
-              getReferenceClientRect: () => lastRect ?? initialRect,
-              appendTo: () => document.body,
-              content: component.element,
-              interactive: true,
-              trigger: "manual",
-              placement: "bottom-start",
-              animation: false,
-            });
-
-            popup.show();
+            createPopup(props);
           },
           onUpdate(props: SuggestionProps<MentionItem>) {
-            component?.updateProps(props);
+            const clientRect = resolveClientRect(props);
+            if (!clientRect) return;
 
-            if (popup) {
-              const resolvedRect = resolveClientRect(props);
-              lastRect = resolvedRect;
-              const getReferenceClientRect: GetReferenceClientRect = () =>
-                lastRect ?? resolvedRect;
-              popup.setProps({ getReferenceClientRect });
-              popup.show();
-              popup.popperInstance?.update();
+            if (!popup) {
+              createPopup(props);
+              return;
             }
+
+            component?.updateProps(props);
+            popup.setProps({ getReferenceClientRect: clientRect });
+            popup.show();
+            popup.popperInstance?.update();
           },
           onKeyDown(props: { event: KeyboardEvent }) {
             if (props.event.key === "Escape") {
