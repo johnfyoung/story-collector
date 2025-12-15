@@ -1,4 +1,184 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { JSONContent } from "@tiptap/core";
+import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
+import CharacterCount from "@tiptap/extension-character-count";
+import Mention from "@tiptap/extension-mention";
+import StarterKit from "@tiptap/starter-kit";
+import tippy, { type Instance as TippyInstance } from "tippy.js";
+import type { SuggestionProps } from "@tiptap/suggestion";
+import "tippy.js/dist/tippy.css";
+
+type MentionAreaProps = {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+  label?: string;
+  maxChars?: number;
+  minHeight?: number;
+};
+
+type MentionItem = { id: string; label: string };
+
+type MentionListHandle = {
+  onKeyDown: (event: KeyboardEvent) => boolean;
+};
+
+type MentionListProps = {
+  items: MentionItem[];
+  command: (item: MentionItem) => void;
+};
+
+const MentionList = forwardRef<MentionListHandle, MentionListProps>(
+  function MentionList({ items, command }, ref) {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+
+    useEffect(() => {
+      setSelectedIndex(0);
+    }, [items]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        onKeyDown: (event: KeyboardEvent) => {
+          if (items.length === 0) return false;
+          if (event.key === "ArrowUp") {
+            setSelectedIndex((idx) => (idx - 1 + items.length) % items.length);
+            return true;
+          }
+          if (event.key === "ArrowDown") {
+            setSelectedIndex((idx) => (idx + 1) % items.length);
+            return true;
+          }
+          if (event.key === "Enter") {
+            command(items[selectedIndex]);
+            return true;
+          }
+          return false;
+        },
+      }),
+      [items, selectedIndex, command]
+    );
+
+    return (
+      <div className="mention-list">
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`mention-list-item${index === selectedIndex ? " is-active" : ""}`}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              command(item);
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+);
+
+function buildContentFromText(text: string, suggestionSet: Set<string>): JSONContent {
+  const mentionPattern = /@([A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*)(?=\s|$|[^A-Za-z0-9_-])/g;
+  const nodes: Array<{ type: string; attrs?: Record<string, unknown>; text?: string }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mentionPattern.exec(text))) {
+    const [full, label] = match;
+    if (match.index > lastIndex) {
+      nodes.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    if (suggestionSet.has(label)) {
+      nodes.push({ type: "mention", attrs: { id: label, label } });
+    } else {
+      nodes.push({ type: "text", text: full });
+    }
+    lastIndex = match.index + full.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: nodes.length > 0 ? nodes : [{ type: "text", text: "" }],
+      },
+    ],
+  } satisfies JSONContent;
+}
+
+function createMentionExtension(items: MentionItem[]) {
+  return Mention.configure({
+    HTMLAttributes: { class: "mention-chip" },
+    renderLabel: ({
+      node,
+    }: {
+      node: { attrs: { label?: string; id?: string } };
+    }) => `@${node.attrs.label ?? node.attrs.id ?? ""}`,
+    suggestion: {
+      char: "@",
+      items: ({ query }: { query: string }) => {
+        const normalized = query?.toLowerCase().trim() ?? "";
+        return items
+          .filter((item) => item.label.toLowerCase().includes(normalized))
+          .slice(0, 8);
+      },
+      render: () => {
+        let component: ReactRenderer<MentionListProps> | null = null;
+        let popup: TippyInstance[] | null = null;
+
+        return {
+          onStart: (props: SuggestionProps<MentionItem>) => {
+            if (!props.clientRect) return;
+
+            component = new ReactRenderer<MentionListProps>(MentionList, {
+              props,
+              editor: props.editor,
+            });
+
+            popup = tippy(document.body, {
+              getReferenceClientRect: props.clientRect,
+              appendTo: () => document.body,
+              content: component.element,
+              showOnCreate: true,
+              interactive: true,
+              trigger: "manual",
+              placement: "bottom-start",
+              animation: false,
+            });
+          },
+          onUpdate(props: SuggestionProps<MentionItem>) {
+            component?.updateProps(props);
+            if (props.clientRect) {
+              popup?.[0].setProps({
+                getReferenceClientRect: props.clientRect,
+              });
+            }
+          },
+          onKeyDown(props: { event: KeyboardEvent }) {
+            if (props.event.key === "Escape") {
+              popup?.[0].hide();
+              return true;
+            }
+            const ref = component?.ref as MentionListHandle | null | undefined;
+            if (!ref) return false;
+            return ref.onKeyDown(props.event);
+          },
+          onExit() {
+            popup?.[0].destroy();
+            component?.destroy();
+          },
+        };
+      },
+    },
+  });
+}
 
 export function MentionArea({
   value,
@@ -7,268 +187,150 @@ export function MentionArea({
   label,
   maxChars,
   minHeight,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  suggestions: string[];
-  label?: string;
-  maxChars?: number;
-  minHeight?: number;
-}) {
-  const [show, setShow] = useState(false);
-  const [query, setQuery] = useState("");
-  const [caret, setCaret] = useState(0);
-  const [selected, setSelected] = useState(0);
+}: MentionAreaProps) {
+  const suggestionSet = useMemo(
+    () => new Set((suggestions || []).map((s) => s.trim()).filter(Boolean)),
+    [suggestions]
+  );
+  const mentionItems = useMemo(
+    () => Array.from(suggestionSet).map((label) => ({ id: label, label })),
+    [suggestionSet]
+  );
 
-  const matches = useMemo(() => {
-    const q = query.toLowerCase();
-    if (!q) return [];
-    return suggestions.filter((s) => s.toLowerCase().includes(q)).slice(0, 8);
-  }, [query, suggestions]);
+  const initialContent = useMemo(
+    () => buildContentFromText(value, suggestionSet),
+    [value, suggestionSet]
+  );
 
-  function handleChange(e: ChangeEvent<HTMLTextAreaElement>) {
-    const raw = e.currentTarget.value;
-    const val = typeof maxChars === "number" ? raw.slice(0, maxChars) : raw;
-    const pos = e.currentTarget.selectionStart ?? val.length;
-    onChange(val);
-    setCaret(pos);
-    updateMentionState(val, pos);
-    setSelected(0);
-  }
+  const mentionExtension = useMemo(
+    () => createMentionExtension(mentionItems),
+    [mentionItems]
+  );
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (!show || matches.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelected((i) => (i + 1) % matches.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelected((i) => (i - 1 + matches.length) % matches.length);
-    } else if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault();
-      insertMention(matches[selected]);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setShow(false);
-    }
-  }
+  const lastContentRef = useRef<JSONContent>(initialContent);
+  const [currentText, setCurrentText] = useState(value);
 
-  function updateMentionState(val: string, pos: number) {
-    const left = val.slice(0, pos);
-    const at = left.lastIndexOf("@");
-    if (at >= 0) {
-      const token = left.slice(at + 1);
-      if (/^[A-Za-z0-9 _-]{0,50}$/.test(token)) {
-        setShow(true);
-        setQuery(token.trimStart());
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        blockquote: false,
+        codeBlock: false,
+      }),
+      CharacterCount.configure({ limit: maxChars }),
+      mentionExtension,
+    ],
+    content: initialContent,
+    onUpdate: ({ editor }) => {
+      const text = editor.getText();
+      if (typeof maxChars === "number" && text.length > maxChars) {
+        editor.commands.setContent(lastContentRef.current, false);
+        const lastPosition = Math.max(
+          0,
+          Math.min(maxChars, editor.state.doc.content.size - 2)
+        );
+        editor.commands.setTextSelection(lastPosition);
         return;
       }
-    }
-    setShow(false);
-    setQuery("");
-  }
-
-  function insertMention(text: string) {
-    const before = value.slice(0, caret);
-    const at = before.lastIndexOf("@");
-    if (at < 0) return;
-    const after = value.slice(caret);
-    const prefix = value.slice(0, at);
-    const inserted = `${prefix}@${text} `;
-    const next = inserted + after;
-    onChange(next);
-    // move caret to the end of the inserted mention + space
-    const newPos = inserted.length;
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (el) {
-        el.focus();
-        el.setSelectionRange(newPos, newPos);
-      }
-    });
-    setCaret(newPos);
-    setShow(false);
-    setQuery("");
-    setSelected(0);
-  }
-
-  // highlight overlay
-
-  // Improved matcher: multi-word mentions that end before next whitespace/end
-  const highlightHtml = useMemo(() => {
-    const escape = (s: string) =>
-      s.replace(
-        /[&<>\"']/g,
-        (c) =>
-          ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;",
-          }[c]!)
-      );
-    const esc = escape(value);
-    const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const toks = Array.from(
-      new Set((suggestions || []).map((s) => s.trim()).filter(Boolean))
-    ).sort((a, b) => b.length - a.length);
-
-    let html: string;
-    if (toks.length > 0) {
-      const pattern = new RegExp(
-        `@(${toks.map(escRe).join("|")})(?=\\s|$|[^A-Za-z0-9_-])`,
-        "g"
-      );
-      html =
-        esc.replace(
-          pattern,
-          (_m, p1) =>
-            `<span class="mention-at">@</span><span class="mention-chip">${p1}</span>`
-        ) || "&nbsp;";
-    } else {
-      const pattern =
-        /@([A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*)(?=\s|$|[^A-Za-z0-9_-])/g;
-      html =
-        esc.replace(
-          pattern,
-          (_m, p1) =>
-            `<span class="mention-at">@</span><span class="mention-chip">${p1}</span>`
-        ) || "&nbsp;";
-    }
-    return html;
-  }, [value, suggestions]);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+      lastContentRef.current = editor.getJSON();
+      setCurrentText(text);
+      onChange(text);
+    },
+    editorProps: {
+      attributes: {
+        class: "mention-area-editor",
+        style: `min-height: ${typeof minHeight === "number" ? minHeight : 96}px;`,
+      },
+    },
+  }, [initialContent, mentionExtension, maxChars, minHeight]);
 
   useEffect(() => {
-    // keep overlay scroll in sync on value changes
-    if (overlayRef.current && textareaRef.current) {
-      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
-      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    if (!editor) return;
+    const text = editor.getText();
+    if (text !== value) {
+      const nextContent = buildContentFromText(value, suggestionSet);
+      lastContentRef.current = nextContent;
+      editor.commands.setContent(nextContent, false);
+      setCurrentText(value);
     }
-  }, [value]);
+  }, [editor, value, suggestionSet]);
 
   return (
     <label style={{ display: "block" }}>
       {label ? (
-        <span
-          style={{
-            display: "block",
-            marginBottom: 6,
-            color: "var(--color-text)",
-            fontSize: "var(--font-md)",
-          }}
-        >
+        <span className="mention-area-label">
           {label}
         </span>
       ) : null}
-      <div ref={containerRef} style={{ position: "relative" }}>
-        <div
-          ref={overlayRef}
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            padding: "10px 12px",
-            boxSizing: "border-box",
-            whiteSpace: "pre-wrap",
-            wordWrap: "break-word",
-            overflow: "hidden",
-            color: "var(--color-text-black)",
-            background: "var(--color-bg-white)",
-            font: "inherit",
-            lineHeight: "inherit",
-            pointerEvents: "none",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid transparent",
-            zIndex: 0,
-          }}
-          dangerouslySetInnerHTML={{ __html: highlightHtml }}
-        />
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onScroll={(e) => {
-            if (overlayRef.current) {
-              overlayRef.current.scrollTop = e.currentTarget.scrollTop;
-              overlayRef.current.scrollLeft = e.currentTarget.scrollLeft;
-            }
-          }}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            boxSizing: "border-box",
-            background: "transparent",
-            color: "transparent",
-            WebkitTextFillColor: "transparent",
-            caretColor: "var(--color-text)",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--color-border)",
-            outline: "none",
-            minHeight: typeof minHeight === "number" ? minHeight : 96,
-            position: "relative",
-            zIndex: 1,
-            font: "inherit",
-            lineHeight: "inherit",
-          }}
-        />
-        {show && matches.length > 0 ? (
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: "100%",
-              zIndex: 20,
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--color-bg)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}
-          >
-            {matches.map((m, i) => (
-              <div
-                key={m}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  insertMention(m);
-                }}
-                style={{
-                  padding: "6px 8px",
-                  cursor: "pointer",
-                  color: "var(--color-text)",
-                  background:
-                    i === selected ? "var(--color-surface)" : "transparent",
-                }}
-              >
-                {m}
-              </div>
-            ))}
-          </div>
-        ) : null}
+      <div className="mention-area-shell">
+        <EditorContent editor={editor} />
       </div>
       {maxChars != null ? (
-        <div
-          style={{
-            marginTop: 6,
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-sm)",
-            textAlign: "right",
-          }}
-        >
-          {Math.max(0, maxChars - (value?.length ?? 0))} characters left
+        <div className="mention-area-counter">
+          {Math.max(0, maxChars - (currentText?.length ?? 0))} characters left
         </div>
       ) : null}
-      {/* Inline style for chips */}
       <style>{`
-        .mention-at{ visibility: hidden; }
-        .mention-chip{ position: relative; display:inline; border-radius: 999px; }
-        .mention-chip::before{ content:""; position:absolute; left:-6px; right:-2px; top:-2px; bottom:-2px; background: rgba(37,99,235,0.15); border-radius: inherit; pointer-events:none; }
+        .mention-area-label {
+          display: block;
+          margin-bottom: 6px;
+          color: var(--color-text);
+          font-size: var(--font-md);
+        }
+        .mention-area-shell {
+          position: relative;
+        }
+        .mention-area-editor {
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: 10px 12px;
+          box-sizing: border-box;
+          font: inherit;
+          line-height: inherit;
+          background: var(--color-bg-white);
+          color: var(--color-text-black);
+          outline: none;
+        }
+        .mention-area-editor p { margin: 0; }
+        .mention-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          border-radius: 999px;
+          padding: 2px 8px;
+          background: rgba(37, 99, 235, 0.15);
+          color: var(--color-text);
+          font-weight: 600;
+        }
+        .mention-list {
+          background: var(--color-bg);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          display: flex;
+          flex-direction: column;
+          min-width: 180px;
+          max-height: 220px;
+          overflow-y: auto;
+        }
+        .mention-list-item {
+          text-align: left;
+          padding: 8px 10px;
+          background: transparent;
+          border: none;
+          border-bottom: 1px solid var(--color-border);
+          color: var(--color-text);
+          font: inherit;
+          cursor: pointer;
+        }
+        .mention-list-item:last-child { border-bottom: none; }
+        .mention-list-item.is-active { background: var(--color-surface); }
+        .mention-area-counter {
+          margin-top: 6px;
+          color: var(--color-text-muted);
+          font-size: var(--font-sm);
+          text-align: right;
+        }
       `}</style>
     </label>
   );
