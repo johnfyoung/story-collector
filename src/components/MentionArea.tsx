@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactElement,
   type Ref,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
@@ -45,7 +46,7 @@ type MentionListProps = {
 
 type MentionListRendererComponent = (
   props: MentionListProps & { ref?: Ref<MentionListHandle> }
-) => JSX.Element;
+) => ReactElement;
 
 const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   function MentionList({ items, command }, ref) {
@@ -152,21 +153,21 @@ function createMentionExtension(items: MentionItem[]) {
         let component: ReactRenderer<MentionListProps> | null = null;
         let popup: TippyInstance | null = null;
 
-        const MentionListRenderer =
-          MentionList as unknown as MentionListRendererComponent;
+          const MentionListRenderer =
+            MentionList as unknown as MentionListRendererComponent;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
             const { clientRect } = props;
             if (!clientRect) return;
 
-            component = new ReactRenderer<MentionListProps, MentionListHandle>(
-              MentionListRenderer,
-              {
-                props,
-                editor: props.editor,
-              }
-            );
+              component = new ReactRenderer<MentionListProps, MentionListHandle>(
+                MentionListRenderer as unknown as object,
+                {
+                  props,
+                  editor: props.editor,
+                }
+              );
 
             const getReferenceClientRect: GetReferenceClientRect = () => {
               const rect = clientRect();
