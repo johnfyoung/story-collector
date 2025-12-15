@@ -1,5 +1,4 @@
 import {
-  type ComponentType,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -8,7 +7,12 @@ import {
   useState,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
+import {
+  EditorContent,
+  ReactRenderer,
+  useEditor,
+  type ComponentType,
+} from "@tiptap/react";
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
@@ -144,17 +148,24 @@ function createMentionExtension(items: MentionItem[]) {
         let component: ReactRenderer<MentionListProps> | null = null;
         let popup: TippyInstance | null = null;
 
-        const MentionListRenderer = MentionList as unknown as ComponentType<MentionListProps>;
+        const MentionListRenderer =
+          MentionList as unknown as ComponentType<
+            MentionListProps,
+            MentionListHandle
+          >;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
             const { clientRect } = props;
             if (!clientRect) return;
 
-            component = new ReactRenderer<MentionListProps>(MentionListRenderer, {
-              props,
-              editor: props.editor,
-            });
+            component = new ReactRenderer<MentionListProps, MentionListHandle>(
+              MentionListRenderer,
+              {
+                props,
+                editor: props.editor,
+              }
+            );
 
             const getReferenceClientRect: GetReferenceClientRect = () => {
               const rect = clientRect();
