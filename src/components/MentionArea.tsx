@@ -1,5 +1,6 @@
+import type { ComponentType } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { JSONContent } from "@tiptap/core";
+import type { Editor, JSONContent } from "@tiptap/core";
 import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
@@ -131,19 +132,25 @@ function createMentionExtension(items: MentionItem[]) {
       },
       render: () => {
         let component: ReactRenderer<MentionListProps> | null = null;
-        let popup: TippyInstance[] | null = null;
+        let popup: TippyInstance | null = null;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
-            if (!props.clientRect) return;
+            const { clientRect } = props;
+            if (!clientRect) return;
 
-            component = new ReactRenderer<MentionListProps>(MentionList, {
-              props,
-              editor: props.editor,
-            });
+            component = new ReactRenderer<MentionListProps>(
+              MentionList as ComponentType<MentionListProps>,
+              {
+                props,
+                editor: props.editor,
+              }
+            );
+
+            const getReferenceClientRect = () => clientRect() ?? new DOMRect();
 
             popup = tippy(document.body, {
-              getReferenceClientRect: props.clientRect,
+              getReferenceClientRect,
               appendTo: () => document.body,
               content: component.element,
               showOnCreate: true,
@@ -155,15 +162,15 @@ function createMentionExtension(items: MentionItem[]) {
           },
           onUpdate(props: SuggestionProps<MentionItem>) {
             component?.updateProps(props);
-            if (props.clientRect) {
-              popup?.[0].setProps({
-                getReferenceClientRect: props.clientRect,
-              });
+
+            if (props.clientRect && popup) {
+              const nextRect = () => props.clientRect?.() ?? new DOMRect();
+              popup.setProps({ getReferenceClientRect: nextRect });
             }
           },
           onKeyDown(props: { event: KeyboardEvent }) {
             if (props.event.key === "Escape") {
-              popup?.[0].hide();
+              popup?.hide();
               return true;
             }
             const ref = component?.ref as MentionListHandle | null | undefined;
@@ -171,7 +178,7 @@ function createMentionExtension(items: MentionItem[]) {
             return ref.onKeyDown(props.event);
           },
           onExit() {
-            popup?.[0].destroy();
+            popup?.destroy();
             component?.destroy();
           },
         };
@@ -221,7 +228,7 @@ export function MentionArea({
       mentionExtension,
     ],
     content: initialContent,
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor }: { editor: Editor }) => {
       const text = editor.getText();
       if (typeof maxChars === "number" && text.length > maxChars) {
         editor.commands.setContent(lastContentRef.current, false);
