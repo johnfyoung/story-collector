@@ -5,13 +5,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import {
   EditorContent,
   ReactRenderer,
   useEditor,
-  type ComponentType,
 } from "@tiptap/react";
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
@@ -149,10 +149,7 @@ function createMentionExtension(items: MentionItem[]) {
         let popup: TippyInstance | null = null;
 
         const MentionListRenderer =
-          MentionList as unknown as ComponentType<
-            MentionListProps,
-            MentionListHandle
-          >;
+          MentionList as unknown as ComponentType<MentionListProps>;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
