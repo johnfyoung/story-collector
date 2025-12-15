@@ -165,36 +165,41 @@ function createMentionExtension(items: MentionItem[]) {
       render: () => {
         let component: ReactRenderer | null = null;
         let popup: TippyInstance | null = null;
+        let lastRect: DOMRect | null = null;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
+            const initialRect = resolveClientRect(props);
+            lastRect = initialRect;
+
             component = new ReactRenderer(MentionList, {
               props,
               editor: props.editor,
             });
 
-            const getReferenceClientRect: GetReferenceClientRect = () =>
-              resolveClientRect(props);
-
             popup = tippy(document.body, {
-              getReferenceClientRect,
+              getReferenceClientRect: () => lastRect ?? initialRect,
               appendTo: () => document.body,
               content: component.element,
-              showOnCreate: true,
               interactive: true,
               trigger: "manual",
               placement: "bottom-start",
               animation: false,
             });
+
+            popup.show();
           },
           onUpdate(props: SuggestionProps<MentionItem>) {
             component?.updateProps(props);
 
             if (popup) {
-              const nextRect: GetReferenceClientRect = () =>
-                resolveClientRect(props);
-              popup.setProps({ getReferenceClientRect: nextRect });
+              const resolvedRect = resolveClientRect(props);
+              lastRect = resolvedRect;
+              const getReferenceClientRect: GetReferenceClientRect = () =>
+                lastRect ?? resolvedRect;
+              popup.setProps({ getReferenceClientRect });
               popup.show();
+              popup.popperInstance?.update();
             }
           },
           onKeyDown(props: { event: KeyboardEvent }) {
