@@ -149,16 +149,13 @@ function createMentionExtension(items: MentionItem[]) {
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
-            const { clientRect } = props;
-            if (!clientRect) return;
-
             component = new ReactRenderer(MentionList, {
               props,
               editor: props.editor,
             });
 
             const getReferenceClientRect: GetReferenceClientRect = () => {
-              const rect = clientRect();
+              const rect = props.clientRect?.();
               return rect ?? new DOMRect();
             };
 
@@ -176,7 +173,7 @@ function createMentionExtension(items: MentionItem[]) {
           onUpdate(props: SuggestionProps<MentionItem>) {
             component?.updateProps(props);
 
-            if (props.clientRect && popup) {
+            if (popup) {
               const nextRect: GetReferenceClientRect = () => {
                 const rect = props.clientRect?.();
                 return rect ?? new DOMRect();
