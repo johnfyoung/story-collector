@@ -15,10 +15,7 @@ import {
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
-import tippy, {
-  type GetReferenceClientRect,
-  type Instance as TippyInstance,
-} from "tippy.js";
+import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import "tippy.js/dist/tippy.css";
 
@@ -171,7 +168,7 @@ function createMentionExtension(itemsRef: { current: MentionItem[] }) {
             placement: "bottom-start",
             animation: false,
             hideOnClick: false,
-            onClickOutside: (instance, event) => {
+            onClickOutside: (_instance, event) => {
               // Prevent hiding when clicking in the editor
               const target = event.target as HTMLElement;
               if (target.closest('.mention-area-editor')) {
