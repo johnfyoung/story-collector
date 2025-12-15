@@ -12,6 +12,7 @@ import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
+import { addRecentEdit } from '../lib/recentEdits'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -20,7 +21,7 @@ function genId() {
 export default function SpeciesForm() {
   const { id: storyId, elemId } = useParams()
   const navigate = useNavigate()
-  const { loadContent, saveContent } = useStories()
+  const { loadContent, saveContent, get: getStory } = useStories()
   const [content, setContent] = useState<StoryContent | null>(null)
   const [name, setName] = useState('')
   const [shortDesc, setShortDesc] = useState('')
@@ -83,12 +84,27 @@ export default function SpeciesForm() {
         longDescription: longDesc,
         avatarUrl,
         descriptors,
+        lastEdited: Date.now(),
       }
       const next: StoryContent = {
         ...content,
         species: content.species.some((x) => x.id === el.id) ? content.species.map((x) => (x.id === el.id ? el : x)) : [el, ...content.species],
       }
       await saveContent(storyId, next)
+
+      // Track recent edit
+      const story = getStory(storyId)
+      if (story) {
+        addRecentEdit({
+          type: 'species',
+          elementId: el.id,
+          elementName: el.name,
+          storyId: storyId,
+          storyName: story.name,
+          editUrl: `/stories/${storyId}/species/${el.id}/edit`
+        })
+      }
+
       navigate(`/stories/${storyId}/species`)
     } finally {
       setSaving(false)

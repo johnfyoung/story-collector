@@ -8,6 +8,7 @@ import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
 import type { NamedElement, StoryContent } from '../types'
+import { addRecentEdit } from '../lib/recentEdits'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -16,7 +17,7 @@ function genId() {
 export default function LanguageForm() {
   const { id: storyId, elemId } = useParams()
   const navigate = useNavigate()
-  const { loadContent, saveContent } = useStories()
+  const { loadContent, saveContent, get: getStory } = useStories()
   const [content, setContent] = useState<StoryContent | null>(null)
   const [name, setName] = useState('')
   const [shortDesc, setShortDesc] = useState('')
@@ -57,12 +58,26 @@ export default function LanguageForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl }
+      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, lastEdited: Date.now() }
       const next: StoryContent = {
         ...content,
         languages: content.languages.some((x) => x.id === el.id) ? content.languages.map((x) => (x.id === el.id ? el : x)) : [el, ...content.languages],
       }
       await saveContent(storyId, next)
+
+      // Track recent edit
+      const story = getStory(storyId)
+      if (story) {
+        addRecentEdit({
+          type: 'language',
+          elementId: el.id,
+          elementName: el.name,
+          storyId: storyId,
+          storyName: story.name,
+          editUrl: `/stories/${storyId}/languages/${el.id}/edit`
+        })
+      }
+
       navigate(`/stories/${storyId}/languages`)
     } finally {
       setSaving(false)

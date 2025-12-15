@@ -8,6 +8,7 @@ import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Disclosure } from '../components/Disclosure'
 import type { Chapter, PlotLine, PlotPoint, StoryContent } from '../types'
+import { addRecentEdit } from '../lib/recentEdits'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -16,7 +17,7 @@ function genId() {
 export default function PlotLineForm() {
   const { id: storyId, plotLineId } = useParams()
   const navigate = useNavigate()
-  const { loadContent, saveContent } = useStories()
+  const { loadContent, saveContent, get: getStory } = useStories()
   const [content, setContent] = useState<StoryContent | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -163,6 +164,7 @@ export default function PlotLineForm() {
         title: title.trim(),
         description: description.trim(),
         chapters,
+        lastEdited: Date.now(),
       }
       const next: StoryContent = {
         ...content,
@@ -171,6 +173,20 @@ export default function PlotLineForm() {
           : [plotLine, ...content.plotLines],
       }
       await saveContent(storyId, next)
+
+      // Track recent edit
+      const story = getStory(storyId)
+      if (story) {
+        addRecentEdit({
+          type: 'plotLine',
+          elementId: plotLine.id,
+          elementName: plotLine.title,
+          storyId: storyId,
+          storyName: story.name,
+          editUrl: `/stories/${storyId}/plot-lines/${plotLine.id}/edit`
+        })
+      }
+
       navigate(`/stories/${storyId}/plot-lines`)
     } finally {
       setSaving(false)

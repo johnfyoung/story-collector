@@ -8,9 +8,7 @@ import { useStories } from "../state/StoriesProvider";
 import { TabNav } from "../components/TabNav";
 import type { NamedElement, StoryContent } from "../types";
 
-// function genId() {
-//   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-// }
+type SortBy = 'alphabetical' | 'lastUpdated' | 'none'
 
 export default function Locations() {
   const { id: storyId } = useParams();
@@ -18,6 +16,7 @@ export default function Locations() {
   const { loadContent, saveContent } = useStories();
   const [content, setContent] = useState<StoryContent | null>(null);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>('none');
 
   useEffect(() => {
     if (!storyId) return;
@@ -40,12 +39,21 @@ export default function Locations() {
   const filtered = useMemo(() => {
     if (!content) return [] as NamedElement[];
     const q = query.toLowerCase();
-    return content.locations.filter(
+    let results = content.locations.filter(
       (el) =>
         el.name.toLowerCase().includes(q) ||
         (el.shortDescription ?? "").toLowerCase().includes(q)
     );
-  }, [content, query]);
+
+    // Sort results
+    if (sortBy === 'alphabetical') {
+      results = results.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'lastUpdated') {
+      results = results.sort((a, b) => (b.lastEdited ?? 0) - (a.lastEdited ?? 0));
+    }
+
+    return results;
+  }, [content, query, sortBy]);
 
   async function remove(id: string) {
     if (!storyId || !content) return;
@@ -82,12 +90,30 @@ export default function Locations() {
         ) : null}
       </div>
       {content ? (
-        <SearchBox
-          value={query}
-          onChange={setQuery}
-          suggestions={content.locations.map((e) => e.name)}
-          placeholder="Search locations…"
-        />
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <SearchBox
+              value={query}
+              onChange={setQuery}
+              suggestions={content.locations.map((e) => e.name)}
+              placeholder="Search locations…"
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              variant={sortBy === 'alphabetical' ? 'primary' : 'ghost'}
+              onClick={() => setSortBy(sortBy === 'alphabetical' ? 'none' : 'alphabetical')}
+            >
+              A-Z
+            </Button>
+            <Button
+              variant={sortBy === 'lastUpdated' ? 'primary' : 'ghost'}
+              onClick={() => setSortBy(sortBy === 'lastUpdated' ? 'none' : 'lastUpdated')}
+            >
+              Recently Updated
+            </Button>
+          </div>
+        </div>
       ) : null}
       {!content ? (
         <div style={{ color: "var(--color-text)" }}>Loading…</div>

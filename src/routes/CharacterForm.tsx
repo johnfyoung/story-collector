@@ -13,6 +13,7 @@ import { Scale } from '../components/Scale'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
+import { addRecentEdit } from '../lib/recentEdits'
 
 type AttrMeta = { key: DescriptorKey; label: string; type: 'short' | 'long' | 'scale5' | 'scale10' | 'media' }
 const PROFILE_ATTRS: AttrMeta[] = [
@@ -163,7 +164,7 @@ function genId() {
 export default function CharacterForm() {
   const { id: storyId, charId } = useParams()
   const navigate = useNavigate()
-  const { loadContent, saveContent } = useStories()
+  const { loadContent, saveContent, get: getStory } = useStories()
   const [content, setContent] = useState<StoryContent | null>(null)
   const [name, setName] = useState('')
   const [longName, setLongName] = useState('')
@@ -225,7 +226,7 @@ export default function CharacterForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const c: Character = { id: charId ?? genId(), name: name.trim(), longName: longName.trim() || undefined, shortDescription: shortDesc.trim(), longDescription: longDesc, descriptors, avatarUrl }
+      const c: Character = { id: charId ?? genId(), name: name.trim(), longName: longName.trim() || undefined, shortDescription: shortDesc.trim(), longDescription: longDesc, descriptors, avatarUrl, lastEdited: Date.now() }
       const next: StoryContent = {
         ...content,
         characters: content.characters.some((x) => x.id === c.id)
@@ -239,6 +240,20 @@ export default function CharacterForm() {
         next.locations = [{ id: genId(), name: birthplace }, ...next.locations]
       }
       await saveContent(storyId, next)
+
+      // Track recent edit
+      const story = getStory(storyId)
+      if (story) {
+        addRecentEdit({
+          type: 'character',
+          elementId: c.id,
+          elementName: c.name,
+          storyId: storyId,
+          storyName: story.name,
+          editUrl: `/stories/${storyId}/characters/${c.id}/edit`
+        })
+      }
+
       navigate(`/stories/${storyId}/characters`)
     } finally {
       setSaving(false)

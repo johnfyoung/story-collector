@@ -12,6 +12,7 @@ import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
+import { addRecentEdit } from '../lib/recentEdits'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -20,7 +21,7 @@ function genId() {
 export default function GroupForm() {
   const { id: storyId, elemId } = useParams()
   const navigate = useNavigate()
-  const { loadContent, saveContent } = useStories()
+  const { loadContent, saveContent, get: getStory } = useStories()
   const [content, setContent] = useState<StoryContent | null>(null)
   const [name, setName] = useState('')
   const [shortDesc, setShortDesc] = useState('')
@@ -104,12 +105,26 @@ export default function GroupForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors }
+      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors, lastEdited: Date.now() }
       const next: StoryContent = {
         ...content,
         groups: content.groups.some((x) => x.id === el.id) ? content.groups.map((x) => (x.id === el.id ? el : x)) : [el, ...content.groups],
       }
       await saveContent(storyId, next)
+
+      // Track recent edit
+      const story = getStory(storyId)
+      if (story) {
+        addRecentEdit({
+          type: 'group',
+          elementId: el.id,
+          elementName: el.name,
+          storyId: storyId,
+          storyName: story.name,
+          editUrl: `/stories/${storyId}/groups/${el.id}/edit`
+        })
+      }
+
       navigate(`/stories/${storyId}/groups`)
     } finally {
       setSaving(false)

@@ -16,6 +16,7 @@ import LocationForm from './routes/LocationForm'
 import GroupForm from './routes/GroupForm'
 import LanguageForm from './routes/LanguageForm'
 import { TopNav } from './components/TopNav'
+import { RecentlyEdited } from './components/RecentlyEdited'
 import SignIn from './routes/SignIn'
 import RequireAuth from './auth/RequireAuth'
 import './App.css'
@@ -25,6 +26,7 @@ function Shell() {
     <div className="app-shell">
       <TopNav />
       <main className="app-main">
+        <RecentlyEdited />
         <Outlet />
       </main>
     </div>

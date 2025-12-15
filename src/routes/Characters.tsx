@@ -8,12 +8,15 @@ import { SearchBox } from "../components/SearchBox";
 import { Avatar } from "../components/Avatar";
 import type { Character, StoryContent } from "../types";
 
+type SortBy = 'alphabetical' | 'lastUpdated' | 'none'
+
 export default function Characters() {
   const { id: storyId } = useParams();
   const navigate = useNavigate();
   const { loadContent } = useStories();
   const [content, setContent] = useState<StoryContent | null>(null);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>('none');
 
   useEffect(() => {
     if (!storyId) return;
@@ -36,12 +39,21 @@ export default function Characters() {
   const filtered = useMemo(() => {
     if (!content) return [] as Character[];
     const q = query.toLowerCase();
-    return content.characters.filter(
+    let results = content.characters.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         (c.shortDescription ?? "").toLowerCase().includes(q)
     );
-  }, [content, query]);
+
+    // Sort results
+    if (sortBy === 'alphabetical') {
+      results = results.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'lastUpdated') {
+      results = results.sort((a, b) => (b.lastEdited ?? 0) - (a.lastEdited ?? 0));
+    }
+
+    return results;
+  }, [content, query, sortBy]);
 
   function startAdd() {}
 
@@ -71,12 +83,30 @@ export default function Characters() {
         <div style={{ color: "var(--color-text)" }}>Loading…</div>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
-          <SearchBox
-            value={query}
-            onChange={setQuery}
-            suggestions={content.characters.map((c) => c.name)}
-            placeholder="Search characters…"
-          />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <SearchBox
+                value={query}
+                onChange={setQuery}
+                suggestions={content.characters.map((c) => c.name)}
+                placeholder="Search characters…"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                variant={sortBy === 'alphabetical' ? 'primary' : 'ghost'}
+                onClick={() => setSortBy(sortBy === 'alphabetical' ? 'none' : 'alphabetical')}
+              >
+                A-Z
+              </Button>
+              <Button
+                variant={sortBy === 'lastUpdated' ? 'primary' : 'ghost'}
+                onClick={() => setSortBy(sortBy === 'lastUpdated' ? 'none' : 'lastUpdated')}
+              >
+                Recently Updated
+              </Button>
+            </div>
+          </div>
           {filtered.length === 0 ? (
             <Card>
               <div style={{ color: "var(--color-text-muted)" }}>

@@ -2,6 +2,7 @@ export type Story = {
   id: string
   name: string
   shortDescription: string
+  lastEdited?: number
 }
 
 // Full story content stored in Appwrite Storage as JSON
@@ -71,9 +72,10 @@ export type Character = {
   longDescription?: string
   descriptors?: Descriptor[]
   avatarUrl?: string
+  lastEdited?: number
 }
 
-export type NamedElement = { id: string; name: string; shortDescription?: string; longDescription?: string; avatarUrl?: string; descriptors?: Descriptor[] }
+export type NamedElement = { id: string; name: string; shortDescription?: string; longDescription?: string; avatarUrl?: string; descriptors?: Descriptor[]; lastEdited?: number }
 
 export type PlotPoint = {
   id: string
@@ -96,6 +98,7 @@ export type PlotLine = {
   title: string
   description?: string
   chapters: Chapter[]
+  lastEdited?: number
 }
 
 export type StoryContent = {

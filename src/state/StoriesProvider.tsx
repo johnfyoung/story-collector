@@ -28,7 +28,12 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
   const [stories, setStories] = useState<Story[]>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? (JSON.parse(raw) as Story[]) : []
+      const parsed = raw ? (JSON.parse(raw) as Story[]) : []
+      // Migrate existing stories to have lastEdited timestamp if missing
+      return parsed.map(s => ({
+        ...s,
+        lastEdited: s.lastEdited ?? Date.now()
+      }))
     } catch {
       return []
     }
@@ -57,7 +62,10 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
 
   function normalizeContent(raw: any): StoryContent {
     const asArray = (x: any) => (Array.isArray(x) ? x : [])
-    const chars = asArray(raw?.characters).map((c: any) => {
+    // Base timestamp for elements without lastEdited (1 year ago)
+    const baseTimestamp = Date.now() - (365 * 24 * 60 * 60 * 1000)
+
+    const chars = asArray(raw?.characters).map((c: any, index: number) => {
       const descs = asArray(c?.descriptors).map(normalizeDescriptor) as Descriptor[]
       return {
         id: String(c?.id ?? genId()),
@@ -67,40 +75,45 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
         longDescription: c?.longDescription ? String(c.longDescription) : undefined,
         descriptors: descs,
         avatarUrl: c?.avatarUrl ? String(c.avatarUrl) : undefined,
+        lastEdited: typeof c?.lastEdited === 'number' ? c.lastEdited : baseTimestamp + index,
       } as Character
     })
     const norm: StoryContent = {
       characters: chars,
-      species: asArray(raw?.species).map((s: any) => ({
+      species: asArray(raw?.species).map((s: any, index: number) => ({
         id: String(s?.id ?? genId()),
         name: String(s?.name ?? ''),
         shortDescription: s?.shortDescription ? String(s.shortDescription) : undefined,
         longDescription: s?.longDescription ? String(s.longDescription) : undefined,
         avatarUrl: s?.avatarUrl ? String(s.avatarUrl) : undefined,
         descriptors: asArray(s?.descriptors).map(normalizeDescriptor),
+        lastEdited: typeof s?.lastEdited === 'number' ? s.lastEdited : baseTimestamp + index,
       })),
-      locations: asArray(raw?.locations ?? raw?.places).map((p: any) => ({
+      locations: asArray(raw?.locations ?? raw?.places).map((p: any, index: number) => ({
         id: String(p?.id ?? genId()),
         name: String(p?.name ?? ''),
         shortDescription: p?.shortDescription ? String(p.shortDescription) : undefined,
         longDescription: p?.longDescription ? String(p.longDescription) : undefined,
         avatarUrl: p?.avatarUrl ? String(p.avatarUrl) : undefined,
         descriptors: asArray(p?.descriptors).map(normalizeDescriptor),
+        lastEdited: typeof p?.lastEdited === 'number' ? p.lastEdited : baseTimestamp + index,
       })),
-      groups: asArray(raw?.groups).map((g: any) => ({
+      groups: asArray(raw?.groups).map((g: any, index: number) => ({
         id: String(g?.id ?? genId()),
         name: String(g?.name ?? ''),
         shortDescription: g?.shortDescription ? String(g.shortDescription) : undefined,
         longDescription: g?.longDescription ? String(g.longDescription) : undefined,
         avatarUrl: g?.avatarUrl ? String(g.avatarUrl) : undefined,
         descriptors: asArray(g?.descriptors).map(normalizeDescriptor),
+        lastEdited: typeof g?.lastEdited === 'number' ? g.lastEdited : baseTimestamp + index,
       })),
-      languages: asArray(raw?.languages).map((l: any) => ({ id: String(l?.id ?? genId()), name: String(l?.name ?? ''), shortDescription: l?.shortDescription ? String(l.shortDescription) : undefined, longDescription: l?.longDescription ? String(l.longDescription) : undefined, avatarUrl: l?.avatarUrl ? String(l.avatarUrl) : undefined })),
-      items: asArray(raw?.items).map((i: any) => ({ id: String(i?.id ?? genId()), name: String(i?.name ?? ''), shortDescription: i?.shortDescription ? String(i.shortDescription) : undefined, longDescription: i?.longDescription ? String(i.longDescription) : undefined, avatarUrl: i?.avatarUrl ? String(i.avatarUrl) : undefined })),
-      plotLines: asArray(raw?.plotLines ?? raw?.plotPoints).map((pl: any) => ({
+      languages: asArray(raw?.languages).map((l: any, index: number) => ({ id: String(l?.id ?? genId()), name: String(l?.name ?? ''), shortDescription: l?.shortDescription ? String(l.shortDescription) : undefined, longDescription: l?.longDescription ? String(l.longDescription) : undefined, avatarUrl: l?.avatarUrl ? String(l.avatarUrl) : undefined, lastEdited: typeof l?.lastEdited === 'number' ? l.lastEdited : baseTimestamp + index })),
+      items: asArray(raw?.items).map((i: any, index: number) => ({ id: String(i?.id ?? genId()), name: String(i?.name ?? ''), shortDescription: i?.shortDescription ? String(i.shortDescription) : undefined, longDescription: i?.longDescription ? String(i.longDescription) : undefined, avatarUrl: i?.avatarUrl ? String(i.avatarUrl) : undefined, lastEdited: typeof i?.lastEdited === 'number' ? i.lastEdited : baseTimestamp + index })),
+      plotLines: asArray(raw?.plotLines ?? raw?.plotPoints).map((pl: any, index: number) => ({
         id: String(pl?.id ?? genId()),
         title: String(pl?.title ?? ''),
         description: pl?.description ? String(pl.description) : undefined,
+        lastEdited: typeof pl?.lastEdited === 'number' ? pl.lastEdited : baseTimestamp + index,
         chapters: asArray(pl?.chapters).map((ch: any) => ({
           id: String(ch?.id ?? genId()),
           title: String(ch?.title ?? ''),
@@ -147,7 +160,12 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
       .then(({ stories, files }) => {
         if (cancelled) return
         fileIdsRef.current = files
-        setStories(stories)
+        // Ensure all stories have lastEdited timestamp
+        const migratedStories = stories.map(s => ({
+          ...s,
+          lastEdited: s.lastEdited ?? Date.now()
+        }))
+        setStories(migratedStories)
       })
       .catch(() => {})
     const unsubDocs = remote.subscribeDocs((type, doc, raw) => {
@@ -164,10 +182,12 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
           fileIdsRef.current[doc.id] = fileId
         }
       }
+      // Ensure doc has lastEdited timestamp
+      const migratedDoc = { ...doc, lastEdited: doc.lastEdited ?? Date.now() }
       setStories((prev) => {
-        if (type === 'create') return [doc, ...prev.filter((p) => p.id !== doc.id)]
-        if (type === 'update') return prev.map((p) => (p.id === doc.id ? doc : p))
-        if (type === 'delete') return prev.filter((p) => p.id !== doc.id)
+        if (type === 'create') return [migratedDoc, ...prev.filter((p) => p.id !== migratedDoc.id)]
+        if (type === 'update') return prev.map((p) => (p.id === migratedDoc.id ? migratedDoc : p))
+        if (type === 'delete') return prev.filter((p) => p.id !== migratedDoc.id)
         return prev
       })
     })
@@ -191,10 +211,10 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
     create: async (s) => {
       if (remoteEnabled && remoteRef.current) {
         // Optimistic local add
-        const temp: Story = { id: genId(), ...s }
+        const temp: Story = { id: genId(), ...s, lastEdited: Date.now() }
         setStories((prev) => [temp, ...prev])
         try {
-          const { story, fileId } = await remoteRef.current.createWithFile(s, emptyStoryContent)
+          const { story, fileId } = await remoteRef.current.createWithFile({ ...s, lastEdited: Date.now() }, emptyStoryContent)
           fileIdsRef.current[story.id] = fileId
           setStories((prev) => [story, ...prev.filter((p) => p.id !== temp.id)])
           return story
@@ -203,14 +223,15 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
           throw e
         }
       }
-      const story: Story = { id: genId(), ...s }
+      const story: Story = { id: genId(), ...s, lastEdited: Date.now() }
       setStories((prev) => [story, ...prev])
       return story
     },
     update: (id, update) => {
-      setStories((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)))
+      const updateWithTimestamp = { ...update, lastEdited: Date.now() }
+      setStories((prev) => prev.map((s) => (s.id === id ? { ...s, ...updateWithTimestamp } : s)))
       if (remoteEnabled && remoteRef.current) {
-        remoteRef.current.update(id, update).catch(() => {
+        remoteRef.current.update(id, updateWithTimestamp).catch(() => {
           // In a more robust impl, refetch or revert on error
         })
       }
@@ -260,11 +281,15 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
       const localKey = localContentKey(id)
       // Save local cache
       try { localStorage.setItem(localKey, JSON.stringify(content)) } catch {}
+      // Update lastEdited timestamp for the story
+      setStories((prev) => prev.map((s) => (s.id === id ? { ...s, lastEdited: Date.now() } : s)))
       if (remoteEnabled && remoteRef.current) {
         const currentFileId = fileIdsRef.current[id]
         try {
           const newFileId = await remoteRef.current.saveJson(id, content, currentFileId)
           fileIdsRef.current[id] = newFileId
+          // Also update the metadata with the new timestamp
+          await remoteRef.current.update(id, { lastEdited: Date.now() }).catch(() => {})
         } catch (e) {
           // keep local cache; surface error to caller
           throw e
