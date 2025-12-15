@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentType,
+  type Ref,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import {
@@ -42,6 +42,10 @@ type MentionListProps = {
   items: MentionItem[];
   command: (item: MentionItem) => void;
 };
+
+type MentionListRendererComponent = (
+  props: MentionListProps & { ref?: Ref<MentionListHandle> }
+) => JSX.Element;
 
 const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   function MentionList({ items, command }, ref) {
@@ -149,7 +153,7 @@ function createMentionExtension(items: MentionItem[]) {
         let popup: TippyInstance | null = null;
 
         const MentionListRenderer =
-          MentionList as unknown as ComponentType<MentionListProps>;
+          MentionList as unknown as MentionListRendererComponent;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
