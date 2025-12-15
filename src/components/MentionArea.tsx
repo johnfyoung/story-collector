@@ -3,6 +3,7 @@ import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
+import type { Editor, JSONContent } from "@tiptap/core";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import "tippy.js/dist/tippy.css";
@@ -22,10 +23,7 @@ type MentionListHandle = {
   onKeyDown: (event: KeyboardEvent) => boolean;
 };
 
-type MentionListProps = {
-  items: MentionItem[];
-  command: (item: MentionItem) => void;
-};
+type MentionListProps = SuggestionProps<MentionItem>;
 
 const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   function MentionList({ items, command }, ref) {
@@ -78,7 +76,7 @@ const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   }
 );
 
-function buildContentFromText(text: string, suggestionSet: Set<string>) {
+function buildContentFromText(text: string, suggestionSet: Set<string>): JSONContent {
   const mentionPattern = /@([A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*)(?=\s|$|[^A-Za-z0-9_-])/g;
   const nodes: Array<{ type: string; attrs?: Record<string, unknown>; text?: string }> = [];
   let lastIndex = 0;
@@ -115,27 +113,30 @@ function buildContentFromText(text: string, suggestionSet: Set<string>) {
 function createMentionExtension(items: MentionItem[]) {
   return Mention.configure({
     HTMLAttributes: { class: "mention-chip" },
-    renderLabel: ({ node }) => `@${node.attrs.label ?? node.attrs.id ?? ""}`,
+    renderLabel: ({ node }: { node: { attrs: { label?: string; id?: string } } }) =>
+      `@${node.attrs.label ?? node.attrs.id ?? ""}`,
     suggestion: {
       char: "@",
-      items: ({ query }) => {
+      items: ({ query }: { query: string }) => {
         const normalized = query?.toLowerCase().trim() ?? "";
         return items
           .filter((item) => item.label.toLowerCase().includes(normalized))
           .slice(0, 8);
       },
       render: () => {
-        let component: ReactRenderer<MentionListProps, MentionListHandle> | null = null;
-        let popup: TippyInstance[] | null = null;
+        let component: ReactRenderer<MentionListProps> | null = null;
+        let popup: TippyInstance | null = null;
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
+            if (!props.clientRect) return;
+
             component = new ReactRenderer(MentionList, {
               props,
               editor: props.editor,
             });
 
-            popup = tippy("body", {
+            popup = tippy(document.body, {
               getReferenceClientRect: props.clientRect,
               appendTo: () => document.body,
               content: component.element,
@@ -147,21 +148,24 @@ function createMentionExtension(items: MentionItem[]) {
             });
           },
           onUpdate(props: SuggestionProps<MentionItem>) {
-            component?.updateProps(props);
-            popup?.[0].setProps({
+            if (!props.clientRect || !component || !popup) return;
+
+            component.updateProps(props);
+            popup.setProps({
               getReferenceClientRect: props.clientRect,
             });
           },
-          onKeyDown(props) {
+          onKeyDown(props: SuggestionProps<MentionItem>) {
             if (props.event.key === "Escape") {
-              popup?.[0].hide();
+              popup?.hide();
               return true;
             }
-            if (!component?.ref) return false;
-            return component.ref.onKeyDown(props.event);
+            const handle = component?.ref as MentionListHandle | null | undefined;
+            if (!handle) return false;
+            return handle.onKeyDown(props.event);
           },
           onExit() {
-            popup?.[0].destroy();
+            popup?.destroy();
             component?.destroy();
           },
         };
@@ -197,7 +201,7 @@ export function MentionArea({
     [mentionItems]
   );
 
-  const lastContentRef = useRef(initialContent);
+  const lastContentRef = useRef<JSONContent>(initialContent);
   const [currentText, setCurrentText] = useState(value);
 
   const editor = useEditor({
@@ -211,7 +215,7 @@ export function MentionArea({
       mentionExtension,
     ],
     content: initialContent,
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor }: { editor: Editor }) => {
       const text = editor.getText();
       if (typeof maxChars === "number" && text.length > maxChars) {
         editor.commands.setContent(lastContentRef.current, false);
