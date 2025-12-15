@@ -250,6 +250,60 @@ npm run lint          # ESLint check
 - Use `descriptorImages.ts` utilities for parsing/serialization
 - Don't manually parse - use the helper functions
 
+### MentionArea Component
+The `MentionArea` component provides rich text editing with @mention support for referencing story elements (characters, locations, species, etc.).
+
+**Technical Stack:**
+- **Tiptap**: React wrapper for ProseMirror editor
+- **Tippy.js**: Popup positioning library for the suggestion dropdown
+- **React**: For rendering the suggestion list
+
+**How It Works:**
+1. User types `@` to trigger the mention system
+2. A filterable popup appears with available story elements
+3. User can type to filter suggestions or use arrow keys to navigate
+4. Selected mentions appear as chips (styled spans) in the text
+5. Plain text output includes `@Name` format
+
+**Key Implementation Details:**
+- **Ref-based items**: Uses `useRef` to store mention items instead of closures, preventing editor recreation when suggestions change
+- **Virtual element for Tippy**: Creates a virtual DOM element for popup positioning (not attached to a real element)
+- **Focus management**: Explicit focus calls and `tabIndex={-1}` on popup/buttons to prevent focus theft from the editor
+- **Editor stability**: `initialContent` is NOT in `useEditor` dependencies - content updates handled via separate `useEffect` to prevent editor recreation on every keystroke
+- **Content parsing**: `buildContentFromText()` converts plain text with `@Name` patterns into Tiptap JSON structure with mention nodes
+
+**Usage Example:**
+```tsx
+<MentionArea
+  label="Description"
+  value={description}
+  onChange={setDescription}
+  suggestions={['Character A', 'Location B', 'Species C']}
+  maxChars={500}
+  minHeight={100}
+/>
+```
+
+**Props:**
+- `value`: Plain text string (e.g., "Meet @Alice at @TownSquare")
+- `onChange`: Callback receiving plain text output
+- `suggestions`: Array of strings to show in mention popup
+- `label`: Optional field label
+- `maxChars`: Optional character limit
+- `minHeight`: Optional minimum height in pixels
+
+**Critical Gotchas:**
+- **DO NOT** include `content` or `initialContent` in `useEditor` dependency array - this causes editor to be destroyed/recreated
+- **DO NOT** recreate the mention extension when items change - use refs for dynamic updates
+- **ALWAYS** use `tabIndex={-1}` on interactive popup elements to prevent focus theft
+- **REMEMBER** the component outputs plain text, not HTML - mentions are stored as `@Name` in the text
+- When parsing existing text, the regex pattern looks for `@Name` followed by whitespace or non-word characters
+
+**Common Issues:**
+- If focus is lost while typing: Check that `initialContent` is not in `useEditor` dependencies
+- If popup doesn't show: Verify `suggestions` prop contains items and `clientRect` is being calculated
+- If mentions don't parse on load: Ensure the mention names in text exactly match items in `suggestions` array
+
 ### Authentication
 - Email/password via Appwrite
 - `AuthProvider` manages session
