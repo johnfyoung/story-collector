@@ -144,7 +144,7 @@ function createMentionExtension(items: MentionItem[]) {
           .slice(0, 8);
       },
       render: () => {
-        let component: ReactRenderer<MentionListProps, MentionListHandle> | null = null;
+        let component: ReactRenderer | null = null;
         let popup: TippyInstance | null = null;
 
         return {
@@ -152,13 +152,10 @@ function createMentionExtension(items: MentionItem[]) {
             const { clientRect } = props;
             if (!clientRect) return;
 
-            component = new ReactRenderer<MentionListProps, MentionListHandle>(
-              MentionList,
-              {
-                props,
-                editor: props.editor,
-              }
-            );
+            component = new ReactRenderer(MentionList, {
+              props,
+              editor: props.editor,
+            });
 
             const getReferenceClientRect: GetReferenceClientRect = () => {
               const rect = clientRect();
