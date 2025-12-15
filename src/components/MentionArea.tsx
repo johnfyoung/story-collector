@@ -1,11 +1,13 @@
-import type { ComponentType } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
 import CharacterCount from "@tiptap/extension-character-count";
 import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
-import tippy, { type Instance as TippyInstance } from "tippy.js";
+import tippy, {
+  type GetReferenceClientRect,
+  type Instance as TippyInstance,
+} from "tippy.js";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import "tippy.js/dist/tippy.css";
 
@@ -139,15 +141,15 @@ function createMentionExtension(items: MentionItem[]) {
             const { clientRect } = props;
             if (!clientRect) return;
 
-            component = new ReactRenderer<MentionListProps>(
-              MentionList as ComponentType<MentionListProps>,
-              {
-                props,
-                editor: props.editor,
-              }
-            );
+            component = new ReactRenderer<MentionListProps>(MentionList, {
+              props,
+              editor: props.editor,
+            });
 
-            const getReferenceClientRect = () => clientRect() ?? new DOMRect();
+            const getReferenceClientRect: GetReferenceClientRect = () => {
+              const rect = clientRect();
+              return rect ?? new DOMRect();
+            };
 
             popup = tippy(document.body, {
               getReferenceClientRect,
@@ -164,7 +166,10 @@ function createMentionExtension(items: MentionItem[]) {
             component?.updateProps(props);
 
             if (props.clientRect && popup) {
-              const nextRect = () => props.clientRect?.() ?? new DOMRect();
+              const nextRect: GetReferenceClientRect = () => {
+                const rect = props.clientRect?.();
+                return rect ?? new DOMRect();
+              };
               popup.setProps({ getReferenceClientRect: nextRect });
             }
           },
