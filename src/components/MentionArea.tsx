@@ -81,6 +81,7 @@ const MentionList = forwardRef<MentionListHandle, MentionListProps>(
           <button
             key={item.id}
             type="button"
+            tabIndex={-1}
             className={`mention-list-item${index === selectedIndex ? " is-active" : ""}`}
             onMouseDown={(event) => {
               event.preventDefault();
@@ -129,7 +130,7 @@ function buildContentFromText(text: string, suggestionSet: Set<string>): JSONCon
   } satisfies JSONContent;
 }
 
-function createMentionExtension(items: MentionItem[]) {
+function createMentionExtension(itemsRef: { current: MentionItem[] }) {
   return Mention.configure({
     HTMLAttributes: { class: "mention-chip" },
     renderLabel: ({
@@ -141,7 +142,7 @@ function createMentionExtension(items: MentionItem[]) {
       char: "@",
       items: ({ query }: { query: string }) => {
         const normalized = query?.toLowerCase().trim() ?? "";
-        return items
+        return itemsRef.current
           .filter((item) => item.label.toLowerCase().includes(normalized))
           .slice(0, 8);
       },
@@ -158,14 +159,37 @@ function createMentionExtension(items: MentionItem[]) {
             editor: props.editor,
           });
 
-          popup = tippy("body", {
-            getReferenceClientRect: clientRect,
+          // Create a virtual reference element for positioning
+          const virtualElement = document.createElement('div');
+
+          popup = tippy(virtualElement, {
+            getReferenceClientRect: () => clientRect as DOMRect | ClientRect,
             appendTo: () => document.body,
             content: component.element,
             interactive: true,
             trigger: "manual",
             placement: "bottom-start",
             animation: false,
+            hideOnClick: false,
+            onClickOutside: (instance, event) => {
+              // Prevent hiding when clicking in the editor
+              const target = event.target as HTMLElement;
+              if (target.closest('.mention-area-editor')) {
+                return false;
+              }
+            },
+            onCreate: (instance) => {
+              // Prevent popup from being focusable
+              instance.popper.setAttribute('tabindex', '-1');
+            },
+            onShow: (instance) => {
+              // Ensure focus stays in the editor
+              instance.popper.setAttribute('tabindex', '-1');
+              // Return focus to editor
+              requestAnimationFrame(() => {
+                props.editor.view.dom.focus();
+              });
+            },
           });
 
           popup.show();
@@ -173,9 +197,15 @@ function createMentionExtension(items: MentionItem[]) {
 
         return {
           onStart: (props: SuggestionProps<MentionItem>) => {
+            if (props.items.length === 0) return;
             createPopup(props);
           },
           onUpdate(props: SuggestionProps<MentionItem>) {
+            if (props.items.length === 0) {
+              popup?.hide();
+              return;
+            }
+
             const clientRect = resolveClientRect(props);
             if (!clientRect) return;
 
@@ -185,9 +215,14 @@ function createMentionExtension(items: MentionItem[]) {
             }
 
             component?.updateProps(props);
-            popup.setProps({ getReferenceClientRect: clientRect });
+            popup.setProps({ getReferenceClientRect: () => clientRect as DOMRect | ClientRect });
             popup.show();
             popup.popperInstance?.update();
+
+            // Keep focus in the editor
+            requestAnimationFrame(() => {
+              props.editor.view.dom.focus();
+            });
           },
           onKeyDown(props: { event: KeyboardEvent }) {
             if (props.event.key === "Escape") {
@@ -230,9 +265,16 @@ export function MentionArea({
     [value, suggestionSet]
   );
 
+  const mentionItemsRef = useRef<MentionItem[]>(mentionItems);
+
+  // Update ref when items change (without recreating the extension)
+  useEffect(() => {
+    mentionItemsRef.current = mentionItems;
+  }, [mentionItems]);
+
   const mentionExtension = useMemo(
-    () => createMentionExtension(mentionItems),
-    [mentionItems]
+    () => createMentionExtension(mentionItemsRef),
+    [] // Empty deps - extension only created once
   );
 
   const lastContentRef = useRef<JSONContent>(initialContent);
@@ -270,7 +312,7 @@ export function MentionArea({
         style: `min-height: ${typeof minHeight === "number" ? minHeight : 96}px;`,
       },
     },
-  }, [initialContent, mentionExtension, maxChars, minHeight]);
+  }, [mentionExtension, maxChars, minHeight]);
 
   useEffect(() => {
     if (!editor) return;
