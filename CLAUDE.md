@@ -348,6 +348,28 @@ Optional Cloudinary config for image uploads.
 
 ## Recent Additions
 
+### 2025-12-15: Recently Edited Bar & Sorting Features
+- **Recently Edited Bar** - Persistent component showing 4 most recently edited story elements
+  - **Location**: Appears below TopNav header, above page content on all authenticated pages
+  - **Component**: `RecentlyEdited.tsx` - Auto-refreshes every second to show live updates
+  - **Data source**: `recentEdits.ts` utility stores recent edits in localStorage under `recentEdits:v1`
+  - **Displays**: Element type, name, and relative time (e.g., "Character: Alice (2m ago)")
+  - **Links**: Each item links directly to the edit page for that element
+  - **Tracking**: All form components (CharacterForm, LocationForm, etc.) automatically track edits via `addRecentEdit()`
+- **Sorting Functionality** - Sort story elements alphabetically or by last updated
+  - **Available on**: Characters, Locations, Plot Lines list pages (pattern can be applied to other lists)
+  - **Sort options**:
+    - **A-Z**: Alphabetical sorting by name/title
+    - **Recently Updated**: Most recently edited elements first
+  - **UI**: Toggle buttons next to search box, active sort highlighted with primary variant
+  - **Data tracking**: `lastEdited` timestamp automatically set when elements are created or modified
+  - **Types updated**: Added `lastEdited?: number` to `Character`, `NamedElement`, and `PlotLine` types
+  - **Migration**: Existing elements get unique timestamps based on original array position (baseTimestamp + index)
+- **Implementation details**:
+  - Forms updated to set `lastEdited: Date.now()` on save
+  - StoriesProvider's `normalizeContent()` ensures all elements have timestamps for proper sorting
+  - Base timestamp set to 1 year ago for migrated elements to distinguish from newly edited ones
+
 ### 2025-11-29: Plot Lines UI
 - **Complete plot line management system** replacing simple plot points
 - **New types** in `types.ts`:
