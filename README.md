@@ -197,6 +197,9 @@ npm run lint          # Run ESLint
 ## Key Features
 
 ### @Mention System
+- Reference any element (character, location, species, group, item, language, plot line) with `@Name`. Mentions render as chips in the editor and are saved as connections on the element, chapters, and plot points.
+- Mentions use boundary-aware matching for multi-word names and re-resolve on load so renamed elements stay in sync with the text.
+- Connections are merged when saving plot lines (description + chapters + plot points) to keep all outgoing references intact.
 
 Type `@` in supported fields to reference any story element (characters, locations, species, groups, items, languages). Available in:
 - Character/element descriptions

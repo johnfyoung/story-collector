@@ -171,6 +171,11 @@ The descriptor system is the core of flexible data modeling. Categories include:
 
 ## Key Patterns & Conventions
 
+### @Mention & Connections
+- Mentions are boundary-aware and match the longest known element name (case-insensitive). Unknown `@` text stays plain.
+- Connections are extracted from text whenever forms save; plot lines recompute from description + chapters + plot points to avoid stale arrays.
+- On load, mentionable elements are passed to `MentionArea` so chips render correctly and renamed elements resolve in-place.
+
 ### Data Flow (Example: Saving a Character)
 1. User edits in `CharacterForm` component
 2. Form updates local state (descriptors, name, etc.)
