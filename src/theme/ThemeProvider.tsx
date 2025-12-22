@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
@@ -49,7 +50,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         | "dark"
         | null;
       if (saved === "light" || saved === "dark") return saved;
-    } catch {}
+    } catch {
+      // ignore localStorage read errors
+    }
     return matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
@@ -65,7 +68,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = theme.name;
     try {
       localStorage.setItem(STORAGE_KEY, theme.name);
-    } catch {}
+    } catch {
+      // ignore localStorage write errors
+    }
   }, [theme]);
 
   const setThemeMode = useCallback((m: "light" | "dark") => setMode(m), []);

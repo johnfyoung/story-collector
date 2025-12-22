@@ -7,12 +7,20 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
-import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
+import type { Descriptor, DescriptorKey, NamedElement, StoryContent, ElementConnection } from '../types'
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
 import { addRecentEdit } from '../lib/recentEdits'
+import {
+  extractConnectionsFromText,
+  getAllMentionableElements,
+  mergeConnections,
+  resolveConnectionsInText,
+  updateConnectionNames,
+  type MentionableElement,
+} from '../lib/connections'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -29,75 +37,109 @@ export default function GroupForm() {
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
   const [descriptors, setDescriptors] = useState<Descriptor[]>([])
+  const [shortDescConnections, setShortDescConnections] = useState<ElementConnection[]>([])
+  const [longDescConnections, setLongDescConnections] = useState<ElementConnection[]>([])
 
   useEffect(() => {
     if (!storyId) return
     loadContent(storyId).then((c) => {
+      const elements = getAllMentionableElements(c)
       setContent(c)
       if (elemId) {
         const ex = c.groups.find((x) => x.id === elemId)
         if (ex) {
+          const mapElementsForKeyLoad = (key: DescriptorKey): MentionableElement[] => {
+            switch (key) {
+              case 'headquarter':
+              case 'territory':
+                return elements.filter((e) => e.type === 'location')
+              case 'founder':
+              case 'members':
+              case 'followers':
+                return elements.filter((e) => e.type === 'character')
+              case 'allies':
+              case 'enemies':
+                return elements.filter((e) => e.type === 'character' || e.type === 'group')
+              case 'language':
+                return elements.filter((e) => e.type === 'language')
+              case 'speciesMembers':
+                return elements.filter((e) => e.type === 'species')
+              case 'associatedTrademarkItem':
+                return elements.filter((e) => e.type === 'item')
+              default:
+                return elements
+            }
+          }
+
           setName(ex.name)
-          setShortDesc(ex.shortDescription ?? '')
-          setLongDesc(ex.longDescription ?? '')
           setAvatarUrl(ex.avatarUrl)
-          setDescriptors(ex.descriptors ?? [])
+
+          const resolvedShort = resolveConnectionsInText(ex.shortDescription ?? '', ex.connections ?? [], elements)
+          setShortDesc(resolvedShort)
+          setShortDescConnections(extractConnectionsFromText(resolvedShort, elements))
+
+          const resolvedLong = resolveConnectionsInText(ex.longDescription ?? '', ex.connections ?? [], elements)
+          setLongDesc(resolvedLong)
+          setLongDescConnections(extractConnectionsFromText(resolvedLong, elements))
+
+          const resolvedDescriptors = (ex.descriptors ?? []).map((d) => {
+            const lookup = mapElementsForKeyLoad(d.key)
+            const baseConnections = d.connections ?? ex.connections ?? []
+            const resolvedValue = resolveConnectionsInText(d.value ?? '', baseConnections, lookup)
+            const connections = baseConnections.length > 0
+              ? updateConnectionNames(baseConnections, lookup)
+              : extractConnectionsFromText(resolvedValue, lookup)
+            return { ...d, value: resolvedValue, connections }
+          })
+          setDescriptors(resolvedDescriptors)
         }
       }
     })
   }, [storyId, elemId, loadContent])
 
-  const suggestions = useMemo(() => {
-    if (!content) return [] as string[]
-    const idx: string[] = []
-    for (const c of content.characters) if (c.name) idx.push(c.name)
-    for (const s of content.species) if (s.name) idx.push(s.name)
-    for (const p of content.locations) if (p.name) idx.push(p.name)
-    for (const i of content.items) if (i.name) idx.push(i.name)
-    for (const g of content.groups) if (g.name) idx.push(g.name)
-    for (const l of content.languages) if (l.name) idx.push(l.name)
-    for (const pl of content.plotLines) if (pl.title) idx.push(pl.title)
-    return idx
+  const mentionableElements = useMemo<MentionableElement[]>(() => {
+    if (!content) return []
+    return getAllMentionableElements(content)
   }, [content])
 
-  const charactersIndex = useMemo(() => (content ? content.characters.map((c) => c.name).filter(Boolean) : []), [content])
-  const groupsIndex = useMemo(() => (content ? content.groups.map((g) => g.name).filter(Boolean) : []), [content])
-  const locationsIndex = useMemo(() => (content ? content.locations.map((p) => p.name).filter(Boolean) : []), [content])
-  const languagesIndex = useMemo(() => (content ? content.languages.map((l) => l.name).filter(Boolean) : []), [content])
-  const speciesIndex = useMemo(() => (content ? content.species.map((s) => s.name).filter(Boolean) : []), [content])
-  const itemsIndex = useMemo(() => (content ? content.items.map((i) => i.name).filter(Boolean) : []), [content])
+  const characterElements = useMemo(() => mentionableElements.filter(e => e.type === 'character'), [mentionableElements])
+  const groupElements = useMemo(() => mentionableElements.filter(e => e.type === 'group'), [mentionableElements])
+  const locationElements = useMemo(() => mentionableElements.filter(e => e.type === 'location'), [mentionableElements])
+  const languageElements = useMemo(() => mentionableElements.filter(e => e.type === 'language'), [mentionableElements])
+  const speciesElements = useMemo(() => mentionableElements.filter(e => e.type === 'species'), [mentionableElements])
+  const itemElements = useMemo(() => mentionableElements.filter(e => e.type === 'item'), [mentionableElements])
 
   const availableImages = useMemo(() => {
     const imagesDescriptor = descriptors.find((d) => d.key === 'images')
     return imagesDescriptor ? parseImageValue(imagesDescriptor.value) : []
   }, [descriptors])
 
-  const mapSuggestionsForKey = (key: DescriptorKey): string[] => {
+  const mapElementsForKey = (key: DescriptorKey): MentionableElement[] => {
     switch (key) {
       // Locations
       case 'headquarter':
       case 'territory':
-        return locationsIndex
+        return locationElements
       // Characters
       case 'founder':
       case 'members':
       case 'followers':
-        return charactersIndex
+        return characterElements
       // Characters + Groups
       case 'allies':
       case 'enemies':
-        return [...charactersIndex, ...groupsIndex]
+        return [...characterElements, ...groupElements]
       // Languages
       case 'language':
-        return languagesIndex
+        return languageElements
       // Species
       case 'speciesMembers':
-        return speciesIndex
+        return speciesElements
       // Items
       case 'associatedTrademarkItem':
-        return itemsIndex
+        return itemElements
       default:
-        return suggestions
+        return mentionableElements
     }
   }
 
@@ -105,7 +147,10 @@ export default function GroupForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors, lastEdited: Date.now() }
+      const allDescriptorConnections = descriptors.flatMap(d => d.connections || [])
+      const connections = mergeConnections(shortDescConnections, longDescConnections, allDescriptorConnections)
+
+      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors, lastEdited: Date.now(), connections }
       const next: StoryContent = {
         ...content,
         groups: content.groups.some((x) => x.id === el.id) ? content.groups.map((x) => (x.id === el.id ? el : x)) : [el, ...content.groups],
@@ -142,10 +187,10 @@ export default function GroupForm() {
             <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={availableImages} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
-              <MentionArea label="Short description" value={shortDesc} onChange={(v) => setShortDesc(v)} suggestions={suggestions} maxChars={160} />
+              <MentionArea label="Short description" value={shortDesc} onChange={(v, conn) => { setShortDesc(v); setShortDescConnections(conn); }} mentionableElements={mentionableElements} maxChars={160} />
               <div>
                 <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
-                <MentionArea value={longDesc} onChange={setLongDesc} suggestions={suggestions} />
+                <MentionArea value={longDesc} onChange={(v, conn) => { setLongDesc(v); setLongDescConnections(conn); }} mentionableElements={mentionableElements} />
               </div>
             </div>
           </div>
@@ -164,7 +209,7 @@ export default function GroupForm() {
                 <div style={{ display: 'grid', gap: 8 }}>
                   {items.map((d) => {
                     const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
-                    const s = mapSuggestionsForKey(d.key)
+                    const elems = mapElementsForKey(d.key)
                     if (d.key === 'images') {
                       return (
                         <ImagesField
@@ -197,8 +242,8 @@ export default function GroupForm() {
                         key={d.id}
                         label={label}
                         value={d.value}
-                        onChange={(v) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v } : x)))}
-                        suggestions={s}
+                        onChange={(v, conn) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v, connections: conn } : x)))}
+                        mentionableElements={elems}
                         minHeight={40}
                       />
                     )

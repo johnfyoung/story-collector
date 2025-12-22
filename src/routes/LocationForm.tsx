@@ -7,12 +7,20 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
-import type { Descriptor, DescriptorKey, NamedElement, StoryContent } from '../types'
+import type { Descriptor, DescriptorKey, NamedElement, StoryContent, ElementConnection } from '../types'
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
 import { addRecentEdit } from '../lib/recentEdits'
+import {
+  extractConnectionsFromText,
+  getAllMentionableElements,
+  mergeConnections,
+  resolveConnectionsInText,
+  updateConnectionNames,
+  type MentionableElement,
+} from '../lib/connections'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -29,35 +37,45 @@ export default function LocationForm() {
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
   const [descriptors, setDescriptors] = useState<Descriptor[]>([])
+  const [shortDescConnections, setShortDescConnections] = useState<ElementConnection[]>([])
+  const [longDescConnections, setLongDescConnections] = useState<ElementConnection[]>([])
 
   useEffect(() => {
     if (!storyId) return
     loadContent(storyId).then((c) => {
+      const elements = getAllMentionableElements(c)
       setContent(c)
       if (elemId) {
         const ex = c.locations.find((x) => x.id === elemId)
         if (ex) {
           setName(ex.name)
-          setShortDesc(ex.shortDescription ?? '')
-          setLongDesc(ex.longDescription ?? '')
           setAvatarUrl(ex.avatarUrl)
-          setDescriptors(ex.descriptors ?? [])
+
+          const resolvedShort = resolveConnectionsInText(ex.shortDescription ?? '', ex.connections ?? [], elements)
+          setShortDesc(resolvedShort)
+          setShortDescConnections(extractConnectionsFromText(resolvedShort, elements))
+
+          const resolvedLong = resolveConnectionsInText(ex.longDescription ?? '', ex.connections ?? [], elements)
+          setLongDesc(resolvedLong)
+          setLongDescConnections(extractConnectionsFromText(resolvedLong, elements))
+
+          const resolvedDescriptors = (ex.descriptors ?? []).map((d) => {
+            const baseConnections = d.connections ?? ex.connections ?? []
+            const resolvedValue = resolveConnectionsInText(d.value ?? '', baseConnections, elements)
+            const connections = baseConnections.length > 0
+              ? updateConnectionNames(baseConnections, elements)
+              : extractConnectionsFromText(resolvedValue, elements)
+            return { ...d, value: resolvedValue, connections }
+          })
+          setDescriptors(resolvedDescriptors)
         }
       }
     })
   }, [storyId, elemId, loadContent])
 
-  const suggestions = useMemo(() => {
-    if (!content) return [] as string[]
-    const idx: string[] = []
-    for (const c of content.characters) if (c.name) idx.push(c.name)
-    for (const s of content.species) if (s.name) idx.push(s.name)
-    for (const p of content.locations) if (p.name) idx.push(p.name)
-    for (const i of content.items) if (i.name) idx.push(i.name)
-    for (const g of content.groups) if (g.name) idx.push(g.name)
-    for (const l of content.languages) if (l.name) idx.push(l.name)
-    for (const pl of content.plotLines) if (pl.title) idx.push(pl.title)
-    return idx
+  const mentionableElements = useMemo<MentionableElement[]>(() => {
+    if (!content) return []
+    return getAllMentionableElements(content)
   }, [content])
 
   const availableImages = useMemo(() => {
@@ -69,7 +87,10 @@ export default function LocationForm() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors, lastEdited: Date.now() }
+      const allDescriptorConnections = descriptors.flatMap(d => d.connections || [])
+      const connections = mergeConnections(shortDescConnections, longDescConnections, allDescriptorConnections)
+
+      const el: NamedElement = { id: elemId ?? genId(), name: name.trim(), shortDescription: shortDesc.trim(), longDescription: longDesc, avatarUrl, descriptors, lastEdited: Date.now(), connections }
       const next: StoryContent = {
         ...content,
         locations: content.locations.some((x) => x.id === el.id) ? content.locations.map((x) => (x.id === el.id ? el : x)) : [el, ...content.locations],
@@ -106,12 +127,12 @@ export default function LocationForm() {
             <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={availableImages} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
-              <MentionArea label="Short description" value={shortDesc} onChange={(v) => setShortDesc(v)} suggestions={suggestions} maxChars={160} />
+              <MentionArea label="Short description" value={shortDesc} onChange={(v, conn) => { setShortDesc(v); setShortDescConnections(conn); }} mentionableElements={mentionableElements} maxChars={160} />
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
-            <MentionArea value={longDesc} onChange={setLongDesc} suggestions={suggestions} />
+            <MentionArea value={longDesc} onChange={(v, conn) => { setLongDesc(v); setLongDescConnections(conn); }} mentionableElements={mentionableElements} />
           </div>
           <div style={{ color: 'var(--color-text)', fontWeight: 600, marginTop: 8 }}>Attributes</div>
           <AttributePicker
@@ -160,8 +181,8 @@ export default function LocationForm() {
                         key={d.id}
                         label={cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)}
                         value={d.value}
-                        onChange={(v) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v } : x)))}
-                        suggestions={suggestions}
+                        onChange={(v, conn) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v, connections: conn } : x)))}
+                        mentionableElements={mentionableElements}
                         minHeight={40}
                       />
                     )

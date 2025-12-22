@@ -62,6 +62,14 @@ export type Descriptor = {
   id: string
   key: DescriptorKey
   value: string
+  connections?: ElementConnection[]  // Track @mentioned elements in this descriptor
+}
+
+// Represents a connection to another story element via @mention
+export type ElementConnection = {
+  id: string        // The referenced element's ID
+  name: string      // Snapshot of the name (for display if element is deleted)
+  type: 'character' | 'location' | 'species' | 'group' | 'item' | 'language' | 'plotLine'
 }
 
 export type Character = {
@@ -73,9 +81,19 @@ export type Character = {
   descriptors?: Descriptor[]
   avatarUrl?: string
   lastEdited?: number
+  connections?: ElementConnection[]  // All connections from shortDescription, longDescription, and descriptors
 }
 
-export type NamedElement = { id: string; name: string; shortDescription?: string; longDescription?: string; avatarUrl?: string; descriptors?: Descriptor[]; lastEdited?: number }
+export type NamedElement = {
+  id: string
+  name: string
+  shortDescription?: string
+  longDescription?: string
+  avatarUrl?: string
+  descriptors?: Descriptor[]
+  lastEdited?: number
+  connections?: ElementConnection[]  // All connections from shortDescription, longDescription, and descriptors
+}
 
 export type PlotPoint = {
   id: string
@@ -83,6 +101,7 @@ export type PlotPoint = {
   aiPrompt?: string
   storyElements?: string
   order: number
+  connections?: ElementConnection[]  // Connections from aiPrompt and storyElements
 }
 
 export type Chapter = {
@@ -91,6 +110,7 @@ export type Chapter = {
   description?: string
   plotPoints: PlotPoint[]
   order: number
+  connections?: ElementConnection[]  // Connections from description
 }
 
 export type PlotLine = {
@@ -99,6 +119,7 @@ export type PlotLine = {
   description?: string
   chapters: Chapter[]
   lastEdited?: number
+  connections?: ElementConnection[]  // Connections from description
 }
 
 export type StoryContent = {
