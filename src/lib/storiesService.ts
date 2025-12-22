@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Databases, Storage, Permission, Role } from "appwrite";
 import { type Models } from "appwrite";
 import { client, ID } from "./appwrite";
@@ -147,7 +148,9 @@ export class StoriesRemote {
     if (currentFileId && currentFileId !== file.$id) {
       try {
         await this.storage.deleteFile(BUCKET_ID, currentFileId);
-      } catch {}
+      } catch {
+        // ignore cleanup failure
+      }
     }
     return file.$id;
   }
@@ -163,24 +166,15 @@ export class StoriesRemote {
   async deleteStory(storyId: string): Promise<void> {
     if (!DB_ID || !STORIES_COLLECTION_ID || !BUCKET_ID)
       throw new Error("Remote stories not configured");
-    try {
-      const doc = await this.db.getDocument(
-        DB_ID,
-        STORIES_COLLECTION_ID,
-        storyId
-      );
-      const fileId = String((doc as any).jsonFileId || "");
-      await this.db.deleteDocument(DB_ID, STORIES_COLLECTION_ID, storyId);
-      if (fileId) {
-        try {
-          await this.storage.deleteFile(BUCKET_ID, fileId);
-        } catch {
-          // ignore file cleanup failure
-        }
+    const doc = await this.db.getDocument(DB_ID, STORIES_COLLECTION_ID, storyId);
+    const fileId = String((doc as any).jsonFileId || "");
+    await this.db.deleteDocument(DB_ID, STORIES_COLLECTION_ID, storyId);
+    if (fileId) {
+      try {
+        await this.storage.deleteFile(BUCKET_ID, fileId);
+      } catch {
+        // ignore file cleanup failure
       }
-    } catch (e) {
-      // rethrow to surface to caller
-      throw e;
     }
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
@@ -7,8 +7,16 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Disclosure } from '../components/Disclosure'
-import type { Chapter, PlotLine, PlotPoint, StoryContent } from '../types'
+import type { Chapter, PlotLine, PlotPoint, StoryContent, ElementConnection } from '../types'
 import { addRecentEdit } from '../lib/recentEdits'
+import {
+  extractConnectionsFromText,
+  getAllMentionableElements,
+  mergeConnections,
+  resolveConnectionsInText,
+  updateConnectionNames,
+  type MentionableElement,
+} from '../lib/connections'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -21,35 +29,85 @@ export default function PlotLineForm() {
   const [content, setContent] = useState<StoryContent | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [descriptionVersion, setDescriptionVersion] = useState(0) // bump to force MentionArea refresh after load
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [saving, setSaving] = useState(false)
+  const hasHydratedRef = useRef(false)
 
   useEffect(() => {
     if (!storyId) return
     loadContent(storyId).then((c) => {
+      const elements = getAllMentionableElements(c)
       setContent(c)
       if (plotLineId) {
         const existing = c.plotLines.find((x) => x.id === plotLineId)
         if (existing) {
           setTitle(existing.title)
-          setDescription(existing.description ?? '')
-          setChapters(existing.chapters)
+          const resolvedDescription = resolveConnectionsInText(existing.description ?? '', existing.connections ?? [], elements)
+          setDescription(resolvedDescription)
+          setDescriptionVersion((v) => v + 1)
+
+          const resolvedChapters = (existing.chapters ?? []).map((ch) => {
+            const chapterBaseConnections = ch.connections ?? existing.connections ?? []
+            const resolvedChapterDesc = resolveConnectionsInText(ch.description ?? '', chapterBaseConnections, elements)
+            const chapterDescConnections = extractConnectionsFromText(resolvedChapterDesc, elements)
+            const chapterConnections = mergeConnections(
+              updateConnectionNames(chapterBaseConnections, elements),
+              chapterDescConnections,
+            )
+
+            const resolvedPlotPoints = (ch.plotPoints ?? []).map((pp) => {
+              const plotPointBaseConnections = pp.connections ?? chapterBaseConnections ?? existing.connections ?? []
+              const resolvedAiPrompt = resolveConnectionsInText(pp.aiPrompt ?? '', plotPointBaseConnections, elements)
+              const resolvedStoryElements = resolveConnectionsInText(pp.storyElements ?? '', plotPointBaseConnections, elements)
+              const plotPointConnections = mergeConnections(
+                updateConnectionNames(plotPointBaseConnections, elements),
+                extractConnectionsFromText(resolvedAiPrompt, elements),
+                extractConnectionsFromText(resolvedStoryElements, elements),
+              )
+              return {
+                ...pp,
+                aiPrompt: resolvedAiPrompt,
+                storyElements: resolvedStoryElements,
+                connections: plotPointConnections,
+              }
+            })
+
+            const mergedChapterConnections = mergeConnections(
+              chapterConnections,
+              ...resolvedPlotPoints.map((pp) => pp.connections),
+            )
+
+            return {
+              ...ch,
+              description: resolvedChapterDesc,
+              plotPoints: resolvedPlotPoints,
+              connections: mergedChapterConnections,
+            }
+          })
+          setChapters(resolvedChapters)
         }
       }
     })
   }, [storyId, plotLineId, loadContent])
 
-  const elementsIndex = useMemo(() => {
-    const idx: string[] = []
-    if (!content) return idx
-    for (const c of content.characters) if (c.name) idx.push(c.name)
-    for (const s of content.species) if (s.name) idx.push(s.name)
-    for (const p of content.locations) if (p.name) idx.push(p.name)
-    for (const i of content.items) if (i.name) idx.push(i.name)
-    for (const g of content.groups) if (g.name) idx.push(g.name)
-    for (const l of content.languages) if (l.name) idx.push(l.name)
-    return idx
+  const mentionableElements = useMemo<MentionableElement[]>(() => {
+    if (!content) return []
+    return getAllMentionableElements(content)
   }, [content])
+
+  // Hydrate once on load to ensure mentions render as chips without clobbering edits
+  useEffect(() => {
+    if (!plotLineId || !content) return
+    if (hasHydratedRef.current) return
+    const existing = content.plotLines.find((pl) => pl.id === plotLineId)
+    if (!existing) return
+    const elements = getAllMentionableElements(content)
+    const resolvedDescription = resolveConnectionsInText(existing.description ?? '', existing.connections ?? [], elements)
+    setDescription(resolvedDescription)
+    setDescriptionVersion((v) => v + 1)
+    hasHydratedRef.current = true
+  }, [plotLineId, content])
 
   function addChapter() {
     const newChapter: Chapter = {
@@ -58,13 +116,14 @@ export default function PlotLineForm() {
       description: '',
       plotPoints: [],
       order: chapters.length,
+      connections: [],
     }
     setChapters([...chapters, newChapter])
   }
 
-  function updateChapter(id: string, updates: Partial<Chapter>) {
+  function updateChapter(id: string, updates: Partial<Chapter>, connections?: ElementConnection[]) {
     setChapters((prev) =>
-      prev.map((ch) => (ch.id === id ? { ...ch, ...updates } : ch))
+      prev.map((ch) => (ch.id === id ? { ...ch, ...updates, connections: connections || ch.connections } : ch))
     )
   }
 
@@ -101,6 +160,7 @@ export default function PlotLineForm() {
       aiPrompt: '',
       storyElements: '',
       order: chapter.plotPoints.length,
+      connections: [],
     }
     updateChapter(chapterId, {
       plotPoints: [...chapter.plotPoints, newPlotPoint],
@@ -110,13 +170,14 @@ export default function PlotLineForm() {
   function updatePlotPoint(
     chapterId: string,
     plotPointId: string,
-    updates: Partial<PlotPoint>
+    updates: Partial<PlotPoint>,
+    connections?: ElementConnection[]
   ) {
     const chapter = chapters.find((ch) => ch.id === chapterId)
     if (!chapter) return
     updateChapter(chapterId, {
       plotPoints: chapter.plotPoints.map((pp) =>
-        pp.id === plotPointId ? { ...pp, ...updates } : pp
+        pp.id === plotPointId ? { ...pp, ...updates, connections: connections || pp.connections } : pp
       ),
     })
   }
@@ -159,12 +220,36 @@ export default function PlotLineForm() {
     if (!storyId || !content || !title.trim()) return
     setSaving(true)
     try {
+      // Build connections fresh from current text to ensure all mentions are captured
+      const normalizedChapters = chapters.map((ch) => {
+        const plotPoints = ch.plotPoints.map((pp) => {
+          const ppConnections = mergeConnections(
+            extractConnectionsFromText(pp.aiPrompt ?? '', mentionableElements),
+            extractConnectionsFromText(pp.storyElements ?? '', mentionableElements),
+          )
+          return { ...pp, connections: ppConnections }
+        })
+        const chapterConnections = mergeConnections(
+          extractConnectionsFromText(ch.description ?? '', mentionableElements),
+          ...plotPoints.map((pp) => pp.connections || []),
+        )
+        return { ...ch, plotPoints, connections: chapterConnections }
+      })
+
+      const descriptionConnFresh = extractConnectionsFromText(description, mentionableElements)
+      const connections = mergeConnections(
+        descriptionConnFresh,
+        ...normalizedChapters.map((ch) => ch.connections || []),
+        ...normalizedChapters.flatMap((ch) => ch.plotPoints.map((pp) => pp.connections || [])),
+      )
+
       const plotLine: PlotLine = {
         id: plotLineId ?? genId(),
         title: title.trim(),
         description: description.trim(),
-        chapters,
+        chapters: normalizedChapters,
         lastEdited: Date.now(),
+        connections,
       }
       const next: StoryContent = {
         ...content,
@@ -228,10 +313,14 @@ export default function PlotLineForm() {
             onChange={(e) => setTitle(e.currentTarget.value)}
           />
           <MentionArea
+            key={`plot-description-${descriptionVersion}`}
             label="Description"
             value={description}
-            onChange={setDescription}
-            suggestions={elementsIndex}
+            onChange={(v) => {
+              setDescription(v)
+              // We recompute connections on save; no need to track per-change here
+            }}
+            mentionableElements={mentionableElements}
             minHeight={80}
           />
 
@@ -275,10 +364,10 @@ export default function PlotLineForm() {
                     <MentionArea
                       label="Chapter description"
                       value={chapter.description ?? ''}
-                      onChange={(val) =>
-                        updateChapter(chapter.id, { description: val })
+                      onChange={(val, conn) =>
+                        updateChapter(chapter.id, { description: val }, conn)
                       }
-                      suggestions={elementsIndex}
+                      mentionableElements={mentionableElements}
                       minHeight={60}
                     />
 
@@ -416,23 +505,26 @@ export default function PlotLineForm() {
                             <MentionArea
                               label="AI Prompt"
                               value={plotPoint.aiPrompt ?? ''}
-                              onChange={(val) =>
+                              onChange={(val, conn) =>
                                 updatePlotPoint(chapter.id, plotPoint.id, {
                                   aiPrompt: val,
-                                })
+                                }, conn)
                               }
-                              suggestions={elementsIndex}
+                              mentionableElements={mentionableElements}
                               minHeight={80}
                             />
                             <MentionArea
                               label="Story Elements"
                               value={plotPoint.storyElements ?? ''}
-                              onChange={(val) =>
+                              onChange={(val, conn) => {
+                                // Merge connections from both AI Prompt and Story Elements
+                                const aiPromptConn = plotPoint.connections || []
+                                const mergedConn = mergeConnections(aiPromptConn, conn)
                                 updatePlotPoint(chapter.id, plotPoint.id, {
                                   storyElements: val,
-                                })
-                              }
-                              suggestions={elementsIndex}
+                                }, mergedConn)
+                              }}
+                              mentionableElements={mentionableElements}
                               minHeight={60}
                             />
                           </div>

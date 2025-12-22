@@ -7,13 +7,21 @@ import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
 import { Avatar } from '../components/Avatar'
-import type { Character, Descriptor, DescriptorKey, StoryContent } from '../types'
+import type { Character, Descriptor, DescriptorKey, StoryContent, ElementConnection } from '../types'
 import { Disclosure } from '../components/Disclosure'
 import { Scale } from '../components/Scale'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
 import { parseImageValue } from '../lib/descriptorImages'
 import { addRecentEdit } from '../lib/recentEdits'
+import {
+  extractConnectionsFromText,
+  getAllMentionableElements,
+  mergeConnections,
+  resolveConnectionsInText,
+  updateConnectionNames,
+  type MentionableElement,
+} from '../lib/connections'
 
 type AttrMeta = { key: DescriptorKey; label: string; type: 'short' | 'long' | 'scale5' | 'scale10' | 'media' }
 const PROFILE_ATTRS: AttrMeta[] = [
@@ -173,41 +181,65 @@ export default function CharacterForm() {
   const [descriptors, setDescriptors] = useState<Descriptor[]>([])
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
+  const [shortDescConnections, setShortDescConnections] = useState<ElementConnection[]>([])
+  const [longDescConnections, setLongDescConnections] = useState<ElementConnection[]>([])
 
   useEffect(() => {
     if (!storyId) return
     loadContent(storyId).then((c) => {
+      const elements = getAllMentionableElements(c)
       setContent(c)
       if (charId) {
         const existing = c.characters.find((x) => x.id === charId)
         if (existing) {
+          const speciesEls = elements.filter((e) => e.type === 'species')
+          const locationEls = elements.filter((e) => e.type === 'location')
+          const characterEls = elements.filter((e) => e.type === 'character')
+          const getDescriptorElements = (key: DescriptorKey) => {
+            if (key === 'birthplace') return locationEls
+            if (key === 'species') return speciesEls
+            if (['pets', 'children', 'significantOther', 'spouse', 'allies', 'enemies', 'familyMembers', 'relationships'].includes(key)) {
+              return characterEls
+            }
+            return elements
+          }
+
           setName(existing.name)
-          setShortDesc(existing.shortDescription ?? '')
-          setLongDesc(existing.longDescription ?? '')
-          setDescriptors(existing.descriptors ?? [])
           setAvatarUrl(existing.avatarUrl)
           setLongName(existing.longName ?? '')
+
+          const resolvedShort = resolveConnectionsInText(existing.shortDescription ?? '', existing.connections ?? [], elements)
+          setShortDesc(resolvedShort)
+          setShortDescConnections(extractConnectionsFromText(resolvedShort, elements))
+
+          const resolvedLong = resolveConnectionsInText(existing.longDescription ?? '', existing.connections ?? [], elements)
+          setLongDesc(resolvedLong)
+          setLongDescConnections(extractConnectionsFromText(resolvedLong, elements))
+
+          const resolvedDescriptors = (existing.descriptors ?? []).map((d) => {
+            const allowed = getDescriptorElements(d.key)
+            const lookup = allowed.length > 0 ? allowed : elements
+            const baseConnections = d.connections ?? existing.connections ?? []
+            const resolvedValue = resolveConnectionsInText(d.value ?? '', baseConnections, lookup)
+            const connections = baseConnections.length > 0
+              ? updateConnectionNames(baseConnections, lookup)
+              : extractConnectionsFromText(resolvedValue, lookup)
+            return { ...d, value: resolvedValue, connections }
+          })
+          setDescriptors(resolvedDescriptors)
         }
       }
     })
   }, [storyId, charId, loadContent])
 
-  const elementsIndex = useMemo(() => {
-    const idx: string[] = []
-    if (!content) return idx
-    for (const c of content.characters) if (c.name) idx.push(c.name)
-    for (const s of content.species) if (s.name) idx.push(s.name)
-    for (const p of content.locations) if (p.name) idx.push(p.name)
-    for (const i of content.items) if (i.name) idx.push(i.name)
-    for (const g of content.groups) if (g.name) idx.push(g.name)
-    for (const l of content.languages) if (l.name) idx.push(l.name)
-    for (const pl of content.plotLines) if (pl.title) idx.push(pl.title)
-    return idx
+  const mentionableElements = useMemo<MentionableElement[]>(() => {
+    if (!content) return []
+    return getAllMentionableElements(content)
   }, [content])
 
-  const speciesIndex = useMemo(() => (content ? content.species.map((s) => s.name).filter(Boolean) : []), [content])
-  const locationsIndex = useMemo(() => (content ? content.locations.map((p) => p.name).filter(Boolean) : []), [content])
-  const charactersIndex = useMemo(() => (content ? content.characters.map((c) => c.name).filter(Boolean) : []), [content])
+  const speciesElements = useMemo(() => mentionableElements.filter(e => e.type === 'species'), [mentionableElements])
+  const locationElements = useMemo(() => mentionableElements.filter(e => e.type === 'location'), [mentionableElements])
+  const characterElements = useMemo(() => mentionableElements.filter(e => e.type === 'character'), [mentionableElements])
 
   const availableImages = useMemo(() => {
     const imagesDescriptor = descriptors.find((d) => d.key === 'images')
@@ -218,15 +250,19 @@ export default function CharacterForm() {
     setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))
   }
 
-  function updateDescriptor(id: string, value: string) {
-    setDescriptors((prev) => prev.map((d) => (d.id === id ? { ...d, value } : d)))
+  function updateDescriptor(id: string, value: string, connections?: ElementConnection[]) {
+    setDescriptors((prev) => prev.map((d) => (d.id === id ? { ...d, value, connections } : d)))
   }
 
   async function onSave() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
     try {
-      const c: Character = { id: charId ?? genId(), name: name.trim(), longName: longName.trim() || undefined, shortDescription: shortDesc.trim(), longDescription: longDesc, descriptors, avatarUrl, lastEdited: Date.now() }
+      // Merge all connections from shortDescription, longDescription, and all descriptors
+      const allDescriptorConnections = descriptors.flatMap(d => d.connections || [])
+      const connections = mergeConnections(shortDescConnections, longDescConnections, allDescriptorConnections)
+
+      const c: Character = { id: charId ?? genId(), name: name.trim(), longName: longName.trim() || undefined, shortDescription: shortDesc.trim(), longDescription: longDesc, descriptors, avatarUrl, lastEdited: Date.now(), connections }
       const next: StoryContent = {
         ...content,
         characters: content.characters.some((x) => x.id === c.id)
@@ -273,12 +309,12 @@ export default function CharacterForm() {
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Short name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <TextField label="Long name" value={longName} onChange={(e) => setLongName(e.currentTarget.value)} />
-              <MentionArea label="Short description" value={shortDesc} onChange={(v) => setShortDesc(v)} suggestions={elementsIndex} maxChars={160} />
+              <MentionArea label="Short description" value={shortDesc} onChange={(v, conn) => { setShortDesc(v); setShortDescConnections(conn); }} mentionableElements={mentionableElements} maxChars={160} />
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
-            <MentionArea value={longDesc} onChange={setLongDesc} suggestions={elementsIndex} />
+            <MentionArea value={longDesc} onChange={(v, conn) => { setLongDesc(v); setLongDescConnections(conn); }} mentionableElements={mentionableElements} />
           </div>
           <div style={{ color: 'var(--color-text)', fontWeight: 600, marginTop: 8 }}>Attributes</div>
           <AttributePicker
@@ -339,9 +375,9 @@ export default function CharacterForm() {
                     const mentionKeys: DescriptorKey[] = ['species','birthplace','pets','children','significantOther','spouse','allies','enemies','familyMembers','relationships']
                     const isMention = mentionKeys.includes(d.key)
                       if (isMention) {
-                        const sugg = d.key === 'birthplace' ? locationsIndex : d.key === 'species' ? speciesIndex : charactersIndex
+                        const elems = d.key === 'birthplace' ? locationElements : d.key === 'species' ? speciesElements : characterElements
                         return (
-                          <MentionArea key={d.id} label={label} value={d.value} onChange={(v) => updateDescriptor(d.id, v)} suggestions={sugg} minHeight={40} />
+                          <MentionArea key={d.id} label={label} value={d.value} onChange={(v, conn) => updateDescriptor(d.id, v, conn)} mentionableElements={elems} minHeight={40} />
                         )
                       }
                       if (meta.type === 'short') {
@@ -350,7 +386,7 @@ export default function CharacterForm() {
                         )
                       }
                       return (
-                        <MentionArea key={d.id} label={label} value={d.value} onChange={(v) => updateDescriptor(d.id, v)} suggestions={elementsIndex} />
+                        <MentionArea key={d.id} label={label} value={d.value} onChange={(v, conn) => updateDescriptor(d.id, v, conn)} mentionableElements={mentionableElements} />
                       )
                     })}
                   </div>

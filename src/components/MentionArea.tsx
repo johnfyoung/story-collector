@@ -17,12 +17,15 @@ import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { SuggestionProps } from "@tiptap/suggestion";
+import type { ElementConnection } from "../types";
+import { extractConnectionsFromText, type MentionableElement } from "../lib/connections";
 import "tippy.js/dist/tippy.css";
 
 type MentionAreaProps = {
   value: string;
-  onChange: (v: string) => void;
-  suggestions: string[];
+  onChange: (text: string, connections: ElementConnection[]) => void;
+  mentionableElements?: MentionableElement[];  // Elements with IDs
+  suggestions?: string[];  // DEPRECATED: For backward compatibility
   label?: string;
   maxChars?: number;
   minHeight?: number;
@@ -93,35 +96,60 @@ const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   }
 );
 
-function buildContentFromText(text: string, suggestionSet: Set<string>): JSONContent {
-  const mentionPattern = /@([A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*)(?=\s|$|[^A-Za-z0-9_-])/g;
+function buildContentFromText(text: string, elements: MentionableElement[]): JSONContent {
   const nodes: Array<{ type: string; attrs?: Record<string, unknown>; text?: string }> = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  const sorted = elements
+    .map(el => ({ ...el, nameLower: el.name.trim().toLowerCase() }))
+    .filter(el => el.nameLower.length > 0)
+    .sort((a, b) => b.nameLower.length - a.nameLower.length); // longest match first
 
-  while ((match = mentionPattern.exec(text))) {
-    const [full, label] = match;
-    if (match.index > lastIndex) {
-      nodes.push({ type: "text", text: text.slice(lastIndex, match.index) });
+  let idx = 0;
+  while (idx < text.length) {
+    const atPos = text.indexOf('@', idx);
+    if (atPos === -1) {
+      // rest is plain text
+      nodes.push({ type: 'text', text: text.slice(idx) });
+      break;
     }
-    if (suggestionSet.has(label)) {
-      nodes.push({ type: "mention", attrs: { id: label, label } });
+    if (atPos > idx) {
+      nodes.push({ type: 'text', text: text.slice(idx, atPos) });
+    }
+    const start = atPos + 1;
+    let matched: MentionableElement | null = null;
+    let matchLength = 0;
+
+    for (const el of sorted) {
+      const nameLower = el.nameLower;
+      if (text.slice(start, start + nameLower.length).toLowerCase() === nameLower) {
+        const boundary = start + nameLower.length;
+        const boundaryChar = boundary < text.length ? text[boundary] : '';
+        if (!boundaryChar || /[\s.,;:!?()[\]{}"']/u.test(boundaryChar)) {
+          matched = el;
+          matchLength = nameLower.length;
+          break; // because sorted by length desc, first match wins
+        }
+      }
+    }
+
+    if (matched) {
+      nodes.push({ type: 'mention', attrs: { id: matched.id, label: matched.name } });
+      idx = start + matchLength;
     } else {
-      nodes.push({ type: "text", text: full });
+      // no known element match, treat '@' as text
+      nodes.push({ type: 'text', text: '@' });
+      idx = start;
     }
-    lastIndex = match.index + full.length;
   }
 
-  if (lastIndex < text.length) {
-    nodes.push({ type: "text", text: text.slice(lastIndex) });
-  }
+  // Normalize to avoid empty text nodes
+  if (nodes.length === 0) nodes.push({ type: 'text', text: '' });
 
   return {
     type: "doc",
     content: [
       {
         type: "paragraph",
-        content: nodes.length > 0 ? nodes : [{ type: "text", text: "" }],
+        content: nodes,
       },
     ],
   } satisfies JSONContent;
@@ -243,24 +271,36 @@ function createMentionExtension(itemsRef: { current: MentionItem[] }) {
 export function MentionArea({
   value,
   onChange,
+  mentionableElements,
   suggestions,
   label,
   maxChars,
   minHeight,
 }: MentionAreaProps) {
+  // Support both new mentionableElements and legacy suggestions prop
+  const elements = useMemo<MentionableElement[]>(() => {
+    if (mentionableElements && Array.isArray(mentionableElements)) return mentionableElements;
+    // Fallback to suggestions for backward compatibility (no IDs available)
+    return (suggestions || []).map((name) => ({
+      id: name,  // Use name as ID for legacy mode
+      name,
+      type: 'character' as const  // Default type
+    }));
+  }, [mentionableElements, suggestions]);
+
+  const mentionItems = useMemo(() => {
+    const list = elements.map((el) => ({ id: el.id, label: el.name }))
+    return list
+  }, [elements])
+
   const suggestionSet = useMemo(
-    () => new Set((suggestions || []).map((s) => s.trim()).filter(Boolean)),
-    [suggestions]
-  );
-  const mentionItems = useMemo(
-    () => Array.from(suggestionSet).map((label) => ({ id: label, label })),
-    [suggestionSet]
+    () => new Set(elements.map((el) => el.name.trim()).filter(Boolean)),
+    [elements]
   );
 
-  const initialContent = useMemo(
-    () => buildContentFromText(value, suggestionSet),
-    [value, suggestionSet]
-  );
+  const initialContent = useMemo(() => {
+    return buildContentFromText(value, elements)
+  }, [value, elements])
 
   const mentionItemsRef = useRef<MentionItem[]>(mentionItems);
 
@@ -275,7 +315,16 @@ export function MentionArea({
   );
 
   const lastContentRef = useRef<JSONContent>(initialContent);
+  const lastSuggestionSetRef = useRef<Set<string>>(suggestionSet);
+  const elementsRef = useRef<MentionableElement[]>(elements);
+  const onChangeRef = useRef(onChange);
   const [currentText, setCurrentText] = useState(value);
+
+  // Update refs when values change (without recreating editor)
+  useEffect(() => {
+    elementsRef.current = elements;
+    onChangeRef.current = onChange;
+  }, [elements, onChange]);
 
   const editor = useEditor({
     extensions: [
@@ -301,7 +350,10 @@ export function MentionArea({
       }
       lastContentRef.current = editor.getJSON();
       setCurrentText(text);
-      onChange(text);
+
+      // Extract connections from the text using current refs
+      const connections = extractConnectionsFromText(text, elementsRef.current);
+      onChangeRef.current(text, connections);
     },
     editorProps: {
       attributes: {
@@ -314,13 +366,35 @@ export function MentionArea({
   useEffect(() => {
     if (!editor) return;
     const text = editor.getText();
-    if (text !== value) {
-      const nextContent = buildContentFromText(value, suggestionSet);
+
+    // Check if suggestions have changed (check both additions and removals)
+    const suggestionsChanged =
+      lastSuggestionSetRef.current.size !== suggestionSet.size ||
+      Array.from(suggestionSet).some(s => !lastSuggestionSetRef.current.has(s)) ||
+      Array.from(lastSuggestionSetRef.current).some(s => !suggestionSet.has(s));
+
+    // Debug logging
+    if (suggestionsChanged || text !== value) {
+      console.log('[MentionArea] Re-parsing:', {
+        text,
+        value,
+        textChanged: text !== value,
+        suggestionsChanged,
+        oldSuggestions: Array.from(lastSuggestionSetRef.current),
+        newSuggestions: Array.from(suggestionSet),
+      });
+    }
+
+    // Re-parse if value changed OR if suggestions changed (to recognize new mentions)
+    if (text !== value || suggestionsChanged) {
+      const nextContent = buildContentFromText(value, elements);
+      console.log('[MentionArea] Built content:', nextContent);
       lastContentRef.current = nextContent;
       editor.commands.setContent(nextContent, false);
       setCurrentText(value);
+      lastSuggestionSetRef.current = suggestionSet;
     }
-  }, [editor, value, suggestionSet]);
+  }, [editor, value, elements, suggestionSet]);
 
   return (
     <label style={{ display: "block" }}>
