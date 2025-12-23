@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Story } from '../types'
+import type { AuthorStyle, AuthorStyleScales, Story } from '../types'
 import { useAuth } from '../auth/AuthProvider'
 import { StoriesRemote, isRemoteConfigured } from '../lib/storiesService'
 import {
@@ -37,6 +37,48 @@ function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function normalizeScale(value: any): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+function normalizeAuthorStyle(raw: any): AuthorStyle | undefined {
+  if (!raw) return undefined
+  let parsed = raw
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return undefined
+    }
+  }
+  const voice = typeof parsed.voice === 'string' ? parsed.voice : undefined
+  const personality = typeof parsed.personality === 'string' ? parsed.personality : undefined
+  const styleNotes = typeof parsed.styleNotes === 'string' ? parsed.styleNotes : undefined
+  const scalesRaw = parsed.scales ?? {}
+  const scales: AuthorStyleScales = {
+    formality: normalizeScale(scalesRaw.formality),
+    descriptiveness: normalizeScale(scalesRaw.descriptiveness),
+    pacing: normalizeScale(scalesRaw.pacing),
+    dialogueFocus: normalizeScale(scalesRaw.dialogueFocus),
+    emotionalIntensity: normalizeScale(scalesRaw.emotionalIntensity),
+    humor: normalizeScale(scalesRaw.humor),
+    darkness: normalizeScale(scalesRaw.darkness),
+  }
+  const hasScales = Object.values(scales).some((value) => typeof value === 'number' && value > 0)
+  if (!voice && !personality && !styleNotes && !hasScales) return undefined
+  return {
+    voice,
+    personality,
+    styleNotes,
+    scales: hasScales ? scales : undefined,
+  }
+}
+
 export function StoriesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [stories, setStories] = useState<Story[]>(() => {
@@ -46,6 +88,7 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
       // Migrate existing stories to have lastEdited timestamp if missing
       return parsed.map(s => ({
         ...s,
+        authorStyle: normalizeAuthorStyle((s as any).authorStyle),
         lastEdited: s.lastEdited ?? Date.now()
       }))
     } catch {
@@ -128,7 +171,6 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
           if (pp.connections && pp.connections.length > 0) return pp
           const conn = mergeConnections(
             extractConnectionsFromText(pp.aiPrompt ?? '', mentionables),
-            extractConnectionsFromText(pp.storyElements ?? '', mentionables),
           )
           return conn.length > 0 ? { ...pp, connections: conn } : pp
         })
@@ -239,6 +281,7 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
         shortDescription: i?.shortDescription ? String(i.shortDescription) : undefined,
         longDescription: i?.longDescription ? String(i.longDescription) : undefined,
         avatarUrl: i?.avatarUrl ? String(i.avatarUrl) : undefined,
+        descriptors: asArray(i?.descriptors).map(normalizeDescriptor),
         lastEdited: typeof i?.lastEdited === 'number' ? i.lastEdited : baseTimestamp + index,
         connections: (() => {
           const conn = asConnections(i?.connections)
@@ -258,6 +301,7 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
           id: String(ch?.id ?? genId()),
           title: String(ch?.title ?? ''),
           description: ch?.description ? String(ch.description) : undefined,
+          storyPrompt: ch?.storyPrompt ? String(ch.storyPrompt) : undefined,
           order: typeof ch?.order === 'number' ? ch.order : 0,
           connections: (() => {
             const conn = asConnections(ch?.connections)
@@ -267,7 +311,6 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
             id: String(pp?.id ?? genId()),
             title: String(pp?.title ?? ''),
             aiPrompt: pp?.aiPrompt ? String(pp.aiPrompt) : undefined,
-            storyElements: pp?.storyElements ? String(pp.storyElements) : undefined,
             order: typeof pp?.order === 'number' ? pp.order : 0,
             connections: (() => {
               const conn = asConnections(pp?.connections)
@@ -364,7 +407,7 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
         const temp: Story = { id: genId(), ...s, lastEdited: Date.now() }
         setStories((prev) => [temp, ...prev])
         try {
-          const { story, fileId } = await remoteRef.current.createWithFile({ ...s, lastEdited: Date.now() }, emptyStoryContent)
+          const { story, fileId } = await remoteRef.current.createWithFile({ ...s }, emptyStoryContent)
           fileIdsRef.current[story.id] = fileId
           setStories((prev) => [story, ...prev.filter((p) => p.id !== temp.id)])
           return story
@@ -381,7 +424,8 @@ export function StoriesProvider({ children }: { children: ReactNode }) {
       const updateWithTimestamp = { ...update, lastEdited: Date.now() }
       setStories((prev) => prev.map((s) => (s.id === id ? { ...s, ...updateWithTimestamp } : s)))
       if (remoteEnabled && remoteRef.current) {
-        remoteRef.current.update(id, updateWithTimestamp).catch(() => {
+        const remotePatch = { ...update }
+        remoteRef.current.update(id, remotePatch).catch(() => {
           // In a more robust impl, refetch or revert on error
         })
       }

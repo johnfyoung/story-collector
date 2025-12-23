@@ -49,6 +49,10 @@ export function ImagesField({
     for (const url of storedImages) addImage(url, false)
     return items
   }, [mainImageUrl, storedImages])
+  const referenceImages = useMemo(
+    () => combinedImages.map((img) => img.url),
+    [combinedImages]
+  )
 
   const canUseCloudinary = isCloudinaryConfigured()
 
@@ -194,8 +198,8 @@ export function ImagesField({
               key={img.url}
               style={{
                 position: 'relative',
-                width: 96,
-                height: 96,
+                width: 400,
+                height: 400,
                 borderRadius: 'var(--radius-sm)',
                 overflow: 'hidden',
                 border: '1px solid var(--color-border)',
@@ -254,6 +258,7 @@ export function ImagesField({
         <ImageGeneratorDialog
           character={character}
           storyContent={storyContent}
+          referenceImages={referenceImages}
           onClose={() => setShowAIDialog(false)}
           onImageGenerated={handleAIImageGenerated}
         />

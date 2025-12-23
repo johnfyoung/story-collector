@@ -2,7 +2,25 @@ export type Story = {
   id: string
   name: string
   shortDescription: string
+  authorStyle?: AuthorStyle
   lastEdited?: number
+}
+
+export type AuthorStyleScales = {
+  formality?: number
+  descriptiveness?: number
+  pacing?: number
+  dialogueFocus?: number
+  emotionalIntensity?: number
+  humor?: number
+  darkness?: number
+}
+
+export type AuthorStyle = {
+  voice?: string
+  personality?: string
+  styleNotes?: string
+  scales?: AuthorStyleScales
 }
 
 // Full story content stored in Appwrite Storage as JSON
@@ -31,12 +49,22 @@ export type DescriptorKey =
   | 'primaryLanguage' | 'secondaryLanguages' | 'languageFluency' | 'accentDialect' | 'slangOrJargon' | 'literacy'
   // Story
   | 'storyRole' | 'shortTermGoals' | 'longTermGoals'
+  // Item: Item
+  | 'owner' | 'currentLocation' | 'partOfCollection' | 'value' | 'rarity' | 'condition' | 'consumable'
+  // Item: Characteristics
+  | 'specialAbilities' | 'properties' | 'composition' | 'occurrence' | 'detectionMethods' | 'fuel'
+  // Item: Function & Care
+  | 'usageInstructions' | 'purpose' | 'maintenance'
+  // Item: History
+  | 'creator' | 'notableOwners' | 'production' | 'dateOfCreation'
+  // Item: Armaments
+  | 'defense' | 'attack' | 'projectiles' | 'range' | 'armaments'
   // Location: Location
-  | 'dimensions' | 'area' | 'condition' | 'inhabitants' | 'population' | 'objects' | 'militaryStrength'
+  | 'dimensions' | 'area' | 'condition' | 'inhabitants' | 'population' | 'objects' | 'militaryStrength' | 'notableLandmarks'
   // Location: Biology and Environment
   | 'feeling' | 'noise' | 'smell' | 'climate' | 'biome' | 'nativeSpecies' | 'sentientRaces' | 'flora' | 'fauna' | 'bodiesOfWater' | 'landmarks' | 'pollution' | 'naturalResources'
   // Location: Culture
-  | 'languages' | 'architecturalStyle' | 'artAndMusic' | 'generalEthics' | 'ethicalControversies' | 'genderRaceEquality' | 'viewsOnLife' | 'viewsOnDeath' | 'criminality' | 'rituals' | 'punishments' | 'tradePartners' | 'legendsAndMyths'
+  | 'languages' | 'architecturalStyle' | 'artAndMusic' | 'generalEthics' | 'ethicalControversies' | 'genderRaceEquality' | 'viewsOnLife' | 'viewsOnDeath' | 'criminality' | 'rituals' | 'punishments' | 'tradePartners' | 'legendsAndMyths' | 'typicalDress' | 'foodAndDrink'
   // Location: Politics
   | 'governmentSystem' | 'politicalFigures' | 'politicalParties' | 'publicOpinion' | 'laws' | 'lawEnforcements' | 'opposingForces'
   // Location: Magic & Technology
@@ -99,15 +127,15 @@ export type PlotPoint = {
   id: string
   title: string
   aiPrompt?: string
-  storyElements?: string
   order: number
-  connections?: ElementConnection[]  // Connections from aiPrompt and storyElements
+  connections?: ElementConnection[]  // Connections from aiPrompt
 }
 
 export type Chapter = {
   id: string
   title: string
   description?: string
+  storyPrompt?: string
   plotPoints: PlotPoint[]
   order: number
   connections?: ElementConnection[]  // Connections from description

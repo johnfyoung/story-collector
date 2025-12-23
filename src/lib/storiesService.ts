@@ -2,7 +2,7 @@
 import { Databases, Storage, Permission, Role } from "appwrite";
 import { type Models } from "appwrite";
 import { client, ID } from "./appwrite";
-import { type Story, type StoryContent } from "../types";
+import { type AuthorStyle, type AuthorStyleScales, type Story, type StoryContent } from "../types";
 
 const DB_ID = import.meta.env.VITE_APPWRITE_DB_ID as string | undefined;
 const STORIES_COLLECTION_ID = import.meta.env
@@ -20,7 +20,60 @@ function toStory(doc: Models.Document): Story {
     id: doc.$id,
     name: String((doc as any).name ?? ""),
     shortDescription: String((doc as any).shortDescription ?? ""),
+    authorStyle: normalizeAuthorStyle((doc as any).authorStyle),
   };
+}
+
+function normalizeAuthorStyle(raw: any): AuthorStyle | undefined {
+  if (!raw) return undefined;
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  const voice = typeof parsed.voice === "string" ? parsed.voice : undefined;
+  const personality = typeof parsed.personality === "string" ? parsed.personality : undefined;
+  const styleNotes = typeof parsed.styleNotes === "string" ? parsed.styleNotes : undefined;
+  const scalesRaw = parsed.scales ?? {};
+  const scales: AuthorStyleScales = {
+    formality: normalizeScale(scalesRaw.formality),
+    descriptiveness: normalizeScale(scalesRaw.descriptiveness),
+    pacing: normalizeScale(scalesRaw.pacing),
+    dialogueFocus: normalizeScale(scalesRaw.dialogueFocus),
+    emotionalIntensity: normalizeScale(scalesRaw.emotionalIntensity),
+    humor: normalizeScale(scalesRaw.humor),
+    darkness: normalizeScale(scalesRaw.darkness),
+  };
+
+  const hasScales = Object.values(scales).some((value) => typeof value === "number" && value > 0);
+  if (!voice && !personality && !styleNotes && !hasScales) return undefined;
+  return {
+    voice,
+    personality,
+    styleNotes,
+    scales: hasScales ? scales : undefined,
+  };
+}
+
+function normalizeScale(value: any): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function serializeAuthorStyle(authorStyle?: AuthorStyle): string {
+  if (!authorStyle) return "";
+  try {
+    return JSON.stringify(authorStyle);
+  } catch {
+    return "";
+  }
 }
 
 export class StoriesRemote {
@@ -104,6 +157,7 @@ export class StoriesRemote {
       ID.unique(),
       {
         ...meta,
+        authorStyle: serializeAuthorStyle(meta.authorStyle),
         jsonFileId: file.$id,
       } as any,
       this.permsOwner()
@@ -114,11 +168,15 @@ export class StoriesRemote {
   async update(id: string, patch: Partial<Omit<Story, "id">>): Promise<Story> {
     if (!DB_ID || !STORIES_COLLECTION_ID)
       throw new Error("Remote stories not configured");
+    const updatePatch = { ...patch };
+    if ("authorStyle" in updatePatch) {
+      updatePatch.authorStyle = serializeAuthorStyle(updatePatch.authorStyle);
+    }
     const doc = await this.db.updateDocument(
       DB_ID,
       STORIES_COLLECTION_ID,
       id,
-      patch as any
+      updatePatch as any
     );
     return toStory(doc);
   }

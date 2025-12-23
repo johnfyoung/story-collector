@@ -16,7 +16,7 @@ export default function Characters() {
   const { loadContent } = useStories();
   const [content, setContent] = useState<StoryContent | null>(null);
   const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortBy>('none');
+  const [sortBy, setSortBy] = useState<SortBy>('lastUpdated');
 
   useEffect(() => {
     if (!storyId) return;
@@ -126,7 +126,7 @@ export default function Characters() {
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: 12,
                     flexWrap: "wrap",
                   }}
@@ -134,21 +134,22 @@ export default function Characters() {
                   <div
                     style={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: 10,
-                      flexWrap: "wrap",
+                      flex: 1,
+                      minWidth: 0,
                     }}
                   >
                     <Avatar
                       name={c.name}
                       url={c.avatarUrl}
-                      size={40}
+                      size={120}
                       editable={false}
                       onChange={() => {
                         /* no-op in list */
                       }}
                     />
-                    <div style={{ minWidth: 0 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                       <div
                         style={{ color: "var(--color-text)", fontWeight: 600 }}
                       >

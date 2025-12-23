@@ -26,7 +26,7 @@ function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-export default function SpeciesForm() {
+export default function ItemForm() {
   const { id: storyId, elemId } = useParams()
   const navigate = useNavigate()
   const { loadContent, saveContent, get: getStory } = useStories()
@@ -48,25 +48,29 @@ export default function SpeciesForm() {
       const elements = getAllMentionableElements(c)
       setContent(c)
       if (elemId) {
-        const ex = c.species.find((x) => x.id === elemId)
-        if (ex) {
-          setName(ex.name)
-          setAvatarUrl(ex.avatarUrl)
+        const existing = c.items.find((x) => x.id === elemId)
+        if (existing) {
+          setName(existing.name)
+          setShortDesc(existing.shortDescription ?? '')
+          setLongDesc(existing.longDescription ?? '')
+          setAvatarUrl(existing.avatarUrl)
 
-          const resolvedShort = resolveConnectionsInText(ex.shortDescription ?? '', ex.connections ?? [], elements)
+          const resolvedShort = resolveConnectionsInText(existing.shortDescription ?? '', existing.connections ?? [], elements)
           setShortDesc(resolvedShort)
           setShortDescConnections(extractConnectionsFromText(resolvedShort, elements))
 
-          const resolvedLong = resolveConnectionsInText(ex.longDescription ?? '', ex.connections ?? [], elements)
+          const resolvedLong = resolveConnectionsInText(existing.longDescription ?? '', existing.connections ?? [], elements)
           setLongDesc(resolvedLong)
           setLongDescConnections(extractConnectionsFromText(resolvedLong, elements))
 
-          const resolvedDescriptors = (ex.descriptors ?? []).map((d) => {
-            const baseConnections = d.connections ?? ex.connections ?? []
-            const resolvedValue = resolveConnectionsInText(d.value ?? '', baseConnections, elements)
+          const resolvedDescriptors = (existing.descriptors ?? []).map((d) => {
+            const allowed = mapElementsForKey(d.key, elements)
+            const lookup = allowed.length > 0 ? allowed : elements
+            const baseConnections = d.connections ?? existing.connections ?? []
+            const resolvedValue = resolveConnectionsInText(d.value ?? '', baseConnections, lookup)
             const connections = baseConnections.length > 0
-              ? updateConnectionNames(baseConnections, elements)
-              : extractConnectionsFromText(resolvedValue, elements)
+              ? updateConnectionNames(baseConnections, lookup)
+              : extractConnectionsFromText(resolvedValue, lookup)
             return { ...d, value: resolvedValue, connections }
           })
           setDescriptors(resolvedDescriptors)
@@ -79,6 +83,23 @@ export default function SpeciesForm() {
     if (!content) return []
     return getAllMentionableElements(content)
   }, [content])
+
+  const characterElements = useMemo(
+    () => mentionableElements.filter((e) => e.type === 'character'),
+    [mentionableElements]
+  )
+  const locationElements = useMemo(
+    () => mentionableElements.filter((e) => e.type === 'location'),
+    [mentionableElements]
+  )
+  const groupElements = useMemo(
+    () => mentionableElements.filter((e) => e.type === 'group'),
+    [mentionableElements]
+  )
+  const itemElements = useMemo(
+    () => mentionableElements.filter((e) => e.type === 'item'),
+    [mentionableElements]
+  )
 
   const availableImages = useMemo(() => {
     const imagesDescriptor = descriptors.find((d) => d.key === 'images')
@@ -127,10 +148,6 @@ export default function SpeciesForm() {
     if (nextHighlightId) setHighlightedDescriptorId(nextHighlightId)
   }
 
-  const updateDescriptor = (id: string, value: string, connections?: ElementConnection[]) => {
-    setDescriptors((prev) => prev.map((d) => (d.id === id ? { ...d, value, connections } : d)))
-  }
-
   async function onSave() {
     if (!storyId || !content || !name.trim()) return
     setSaving(true)
@@ -150,25 +167,26 @@ export default function SpeciesForm() {
       }
       const next: StoryContent = {
         ...content,
-        species: content.species.some((x) => x.id === el.id) ? content.species.map((x) => (x.id === el.id ? el : x)) : [el, ...content.species],
+        items: content.items.some((x) => x.id === el.id)
+          ? content.items.map((x) => (x.id === el.id ? el : x))
+          : [el, ...content.items],
       }
       await saveContent(storyId, next)
 
-      // Track recent edit
       const story = getStory(storyId)
       if (story) {
         addRecentEdit({
-          type: 'species',
+          type: 'item',
           elementId: el.id,
           elementName: el.name,
           storyId: storyId,
           storyName: story.name,
-          editUrl: `/stories/${storyId}/species/${el.id}/edit`
+          editUrl: `/stories/${storyId}/items/${el.id}/edit`
         })
       }
 
       setHighlightedDescriptorId(null)
-      navigate(`/stories/${storyId}/species`)
+      navigate(`/stories/${storyId}/items`)
     } finally {
       setSaving(false)
     }
@@ -192,8 +210,8 @@ export default function SpeciesForm() {
   if (!storyId) return null
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <TabNav active="species" storyId={storyId} />
-      {elemId ? null : <h1 style={{ color: 'var(--color-text)', margin: 0 }}>Add species</h1>}
+      <TabNav active="items" storyId={storyId} />
+      {elemId ? null : <h1 style={{ color: 'var(--color-text)', margin: 0 }}>Add item</h1>}
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -201,16 +219,20 @@ export default function SpeciesForm() {
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <MentionArea label="Short description" value={shortDesc} onChange={(v, conn) => { setShortDesc(v); setShortDescConnections(conn); }} mentionableElements={mentionableElements} maxChars={160} />
+              <div>
+                <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
+                <MentionArea value={longDesc} onChange={(v, conn) => { setLongDesc(v); setLongDescConnections(conn); }} mentionableElements={mentionableElements} />
+              </div>
             </div>
           </div>
-          <div>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', marginBottom: 6 }}>Long description</div>
-            <MentionArea value={longDesc} onChange={(v, conn) => { setLongDesc(v); setLongDescConnections(conn); }} mentionableElements={mentionableElements} />
-          </div>
           <div style={{ color: 'var(--color-text)', fontWeight: 600, marginTop: 8 }}>Attributes</div>
-          <AttributePicker categories={getSpeciesCategories()} chosenKeys={descriptors.map((d) => d.key)} onAdd={addDescriptor} />
+          <AttributePicker
+            categories={getItemCategories()}
+            chosenKeys={descriptors.map((d) => d.key)}
+            onAdd={addDescriptor}
+          />
 
-          {getSpeciesCategories().map((cat) => {
+          {getItemCategories().map((cat) => {
             const items = descriptors.filter((d) => cat.items.some((i) => i.key === d.key))
             if (items.length === 0) return null
             return (
@@ -218,6 +240,12 @@ export default function SpeciesForm() {
                 <div style={{ display: 'grid', gap: 8 }}>
                   {items.map((d) => {
                     const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
+                    const elems = mapElementsForKey(d.key, mentionableElements, {
+                      characterElements,
+                      locationElements,
+                      groupElements,
+                      itemElements,
+                    })
                     const isHighlighted = highlightedDescriptorId === d.id
                     const wrapperProps = {
                       ref: (el: HTMLDivElement | null) => {
@@ -241,16 +269,22 @@ export default function SpeciesForm() {
                           <ImagesField
                             label={label}
                             value={d.value}
-                            onChange={(next) => updateDescriptor(d.id, next)}
+                            onChange={(next) =>
+                              setDescriptors((prev) =>
+                                prev.map((x) => (x.id === d.id ? { ...x, value: next } : x)),
+                              )
+                            }
                             mainImageUrl={avatarUrl}
                             character={{ name, shortDescription: shortDesc, descriptors }}
                             storyContent={content || undefined}
                             onPromptSave={(prompt) => {
                               const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
                               if (aiPromptDescriptor) {
-                                updateDescriptor(aiPromptDescriptor.id, prompt)
+                                setDescriptors((prev) =>
+                                  prev.map((x) => (x.id === aiPromptDescriptor.id ? { ...x, value: prompt } : x))
+                                )
                               } else {
-                                setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                                setDescriptors((prev) => [...prev, { id: genId(), key: 'aiImagePrompt', value: prompt }])
                               }
                             }}
                           />
@@ -262,8 +296,8 @@ export default function SpeciesForm() {
                         <MentionArea
                           label={label}
                           value={d.value}
-                          onChange={(v, conn) => updateDescriptor(d.id, v, conn)}
-                          mentionableElements={mentionableElements}
+                          onChange={(v, conn) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v, connections: conn } : x)))}
+                          mentionableElements={elems}
                           minHeight={40}
                         />
                       </div>
@@ -295,21 +329,77 @@ export default function SpeciesForm() {
   )
 }
 
-function getSpeciesCategories(): { title: string; items: { key: DescriptorKey; label: string }[] }[] {
+function mapElementsForKey(
+  key: DescriptorKey,
+  allElements: MentionableElement[],
+  buckets?: {
+    characterElements: MentionableElement[]
+    locationElements: MentionableElement[]
+    groupElements: MentionableElement[]
+    itemElements: MentionableElement[]
+  }
+) {
+  if (!buckets) return allElements
+  const { characterElements, locationElements, groupElements, itemElements } = buckets
+  switch (key) {
+    case 'owner':
+    case 'notableOwners':
+    case 'creator':
+      return [...characterElements, ...groupElements]
+    case 'currentLocation':
+      return locationElements
+    case 'partOfCollection':
+      return [...groupElements, ...itemElements]
+    default:
+      return allElements
+  }
+}
+
+function getItemCategories(): { title: string; items: { key: DescriptorKey; label: string }[] }[] {
   return [
-    {
-      title: 'Appearance',
-      items: [
-        { key: 'bodyType', label: 'Body Type' },
-        { key: 'height', label: 'Height' },
-        { key: 'skinTone', label: 'Skin Tone' },
-        { key: 'distinguishingFeature', label: 'Distinguishing Features' },
-        { key: 'aiImagePrompt', label: 'AI Image Prompt' },
-      ],
-    },
-    {
-      title: 'Media',
-      items: [{ key: 'images', label: 'Images' }],
-    },
+    { title: 'Item', items: [
+      { key: 'owner', label: 'Owner' },
+      { key: 'currentLocation', label: 'Current location' },
+      { key: 'partOfCollection', label: 'Part of collection' },
+      { key: 'value', label: 'Value' },
+      { key: 'rarity', label: 'Rarity' },
+      { key: 'condition', label: 'Condition' },
+      { key: 'consumable', label: 'Consumable' },
+    ]},
+    { title: 'Characteristics', items: [
+      { key: 'specialAbilities', label: 'Special abilities' },
+      { key: 'properties', label: 'Properties' },
+      { key: 'composition', label: 'Composition' },
+      { key: 'occurrence', label: 'Occurrence' },
+      { key: 'detectionMethods', label: 'Detection methods' },
+      { key: 'dimensions', label: 'Dimensions' },
+      { key: 'weight', label: 'Weight' },
+      { key: 'fuel', label: 'Fuel' },
+    ]},
+    { title: 'Function & care', items: [
+      { key: 'usageInstructions', label: 'Usage instructions' },
+      { key: 'purpose', label: 'Purpose' },
+      { key: 'maintenance', label: 'Maintenance' },
+    ]},
+    { title: 'History', items: [
+      { key: 'creator', label: 'Creator' },
+      { key: 'notableOwners', label: 'Notable owners' },
+      { key: 'legendsAndMyths', label: 'Legends & myths' },
+      { key: 'production', label: 'Production' },
+      { key: 'history', label: 'History' },
+      { key: 'origin', label: 'Origin' },
+      { key: 'dateOfCreation', label: 'Date of creation' },
+    ]},
+    { title: 'Armaments', items: [
+      { key: 'defense', label: 'Defense' },
+      { key: 'attack', label: 'Attack' },
+      { key: 'projectiles', label: 'Projectiles' },
+      { key: 'range', label: 'Range' },
+      { key: 'armaments', label: 'Armaments' },
+    ]},
+    { title: 'Media', items: [
+      { key: 'images', label: 'Images' },
+      { key: 'aiImagePrompt', label: 'AI Image Prompt' },
+    ]},
   ]
 }

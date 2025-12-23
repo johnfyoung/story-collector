@@ -14,6 +14,7 @@ export type GenerateImageOptions = {
   size?: ImageSize
   quality?: ImageQuality
   model?: ImageModel
+  referenceImageUrl?: string
 }
 
 type OpenAIImageResponse = {
@@ -48,33 +49,30 @@ export async function generateImage(
     prompt,
     size = '1024x1024',
     quality = model === 'gpt-image-1' ? 'medium' : 'standard',
+    referenceImageUrl,
   } = options
 
   if (!prompt?.trim()) {
     throw new Error('Prompt is required')
   }
 
-  const requestBody: Record<string, unknown> = {
-    model,
-    prompt: prompt.trim(),
-    n: 1,
-    size,
-  }
-
-  // DALL-E 3 and gpt-image-1 support quality parameter
-  if (model === 'dall-e-3' || model === 'gpt-image-1') {
-    requestBody.quality = quality
-  }
-
   try {
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
-    })
+    const response = referenceImageUrl
+      ? await generateImageWithReference({
+          model,
+          prompt: prompt.trim(),
+          size,
+          quality,
+          referenceImageUrl,
+        })
+      : await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(buildGenerationBody(model, prompt.trim(), size, quality)),
+        })
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '')
@@ -125,6 +123,68 @@ export async function generateImage(
     }
     throw new Error('Unknown error occurred while generating image')
   }
+}
+
+function buildGenerationBody(
+  model: ImageModel,
+  prompt: string,
+  size: ImageSize,
+  quality: ImageQuality
+): Record<string, unknown> {
+  const requestBody: Record<string, unknown> = {
+    model,
+    prompt,
+    n: 1,
+    size,
+  }
+
+  // DALL-E 3 and gpt-image-1 support quality parameter
+  if (model === 'dall-e-3' || model === 'gpt-image-1') {
+    requestBody.quality = quality
+  }
+
+  return requestBody
+}
+
+async function generateImageWithReference(options: {
+  model: ImageModel
+  prompt: string
+  size: ImageSize
+  quality: ImageQuality
+  referenceImageUrl: string
+}): Promise<Response> {
+  const { model, prompt, size, quality, referenceImageUrl } = options
+
+  if (model === 'dall-e-3') {
+    throw new Error('Reference images are not supported with the DALL-E 3 model')
+  }
+
+  const imageResponse = await fetch(referenceImageUrl)
+  if (!imageResponse.ok) {
+    throw new Error('Failed to download reference image')
+  }
+
+  const blob = await imageResponse.blob()
+  const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
+
+  const form = new FormData()
+  form.append('model', model)
+  form.append('prompt', prompt)
+  form.append('n', '1')
+  form.append('size', size)
+  form.append('image', file)
+
+  if (model === 'gpt-image-1') {
+    form.append('quality', String(quality))
+  }
+
+  return fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: form,
+  })
 }
 
 /**

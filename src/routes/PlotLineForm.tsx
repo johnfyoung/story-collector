@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { TextField } from '../components/TextField'
+import { TextArea } from '../components/TextArea'
 import { MentionArea } from '../components/MentionArea'
 import { TabNav } from '../components/TabNav'
 import { useStories } from '../state/StoriesProvider'
@@ -17,6 +18,7 @@ import {
   updateConnectionNames,
   type MentionableElement,
 } from '../lib/connections'
+import { buildChapterStoryPrompt } from '../lib/storyPromptBuilder'
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -32,7 +34,9 @@ export default function PlotLineForm() {
   const [descriptionVersion, setDescriptionVersion] = useState(0) // bump to force MentionArea refresh after load
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [saving, setSaving] = useState(false)
+  const [copiedChapterId, setCopiedChapterId] = useState<string | null>(null)
   const hasHydratedRef = useRef(false)
+  const story = storyId ? getStory(storyId) : undefined
 
   useEffect(() => {
     if (!storyId) return
@@ -59,16 +63,13 @@ export default function PlotLineForm() {
             const resolvedPlotPoints = (ch.plotPoints ?? []).map((pp) => {
               const plotPointBaseConnections = pp.connections ?? chapterBaseConnections ?? existing.connections ?? []
               const resolvedAiPrompt = resolveConnectionsInText(pp.aiPrompt ?? '', plotPointBaseConnections, elements)
-              const resolvedStoryElements = resolveConnectionsInText(pp.storyElements ?? '', plotPointBaseConnections, elements)
               const plotPointConnections = mergeConnections(
                 updateConnectionNames(plotPointBaseConnections, elements),
                 extractConnectionsFromText(resolvedAiPrompt, elements),
-                extractConnectionsFromText(resolvedStoryElements, elements),
               )
               return {
                 ...pp,
                 aiPrompt: resolvedAiPrompt,
-                storyElements: resolvedStoryElements,
                 connections: plotPointConnections,
               }
             })
@@ -114,6 +115,7 @@ export default function PlotLineForm() {
       id: genId(),
       title: '',
       description: '',
+      storyPrompt: '',
       plotPoints: [],
       order: chapters.length,
       connections: [],
@@ -158,7 +160,6 @@ export default function PlotLineForm() {
       id: genId(),
       title: '',
       aiPrompt: '',
-      storyElements: '',
       order: chapter.plotPoints.length,
       connections: [],
     }
@@ -188,6 +189,45 @@ export default function PlotLineForm() {
     updateChapter(chapterId, {
       plotPoints: chapter.plotPoints.filter((pp) => pp.id !== plotPointId),
     })
+  }
+
+  function generateChapterPrompt(chapter: Chapter) {
+    if (!content) return
+    const plotPointConnections = mergeConnections(
+      ...chapter.plotPoints.map((pp) =>
+        extractConnectionsFromText(pp.aiPrompt ?? '', mentionableElements),
+      ),
+    )
+    const chapterConnections = mergeConnections(
+      extractConnectionsFromText(chapter.description ?? '', mentionableElements),
+      plotPointConnections,
+    )
+    const plotPointPrompts = chapter.plotPoints
+      .map((pp) => pp.aiPrompt?.trim())
+      .filter((prompt): prompt is string => Boolean(prompt))
+    const prompt = buildChapterStoryPrompt({
+      chapterTitle: chapter.title,
+      chapterDescription: chapter.description ?? '',
+      chapterConnections,
+      plotPointPrompts,
+      storyContent: content,
+      authorStyle: story?.authorStyle,
+    })
+    updateChapter(chapter.id, { storyPrompt: prompt })
+  }
+
+  async function copyChapterPrompt(chapterId: string) {
+    const prompt = chapters.find((ch) => ch.id === chapterId)?.storyPrompt
+    if (!prompt) return
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopiedChapterId(chapterId)
+      setTimeout(() => {
+        setCopiedChapterId((current) => (current === chapterId ? null : current))
+      }, 1500)
+    } catch {
+      // Ignore clipboard errors (e.g., blocked permissions)
+    }
   }
 
   function movePlotPointUp(chapterId: string, index: number) {
@@ -225,7 +265,6 @@ export default function PlotLineForm() {
         const plotPoints = ch.plotPoints.map((pp) => {
           const ppConnections = mergeConnections(
             extractConnectionsFromText(pp.aiPrompt ?? '', mentionableElements),
-            extractConnectionsFromText(pp.storyElements ?? '', mentionableElements),
           )
           return { ...pp, connections: ppConnections }
         })
@@ -370,6 +409,69 @@ export default function PlotLineForm() {
                       mentionableElements={mentionableElements}
                       minHeight={60}
                     />
+                    <Card
+                      style={{
+                        background: 'var(--color-bg)',
+                        border: '1px solid var(--color-border)',
+                      }}
+                    >
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              color: 'var(--color-text-muted)',
+                              fontSize: 'var(--font-sm)',
+                            }}
+                          >
+                            Story prompt
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <Button
+                              variant="ghost"
+                              onClick={() => generateChapterPrompt(chapter)}
+                            >
+                              Generate
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => copyChapterPrompt(chapter.id)}
+                              disabled={!chapter.storyPrompt}
+                            >
+                              {copiedChapterId === chapter.id ? 'Copied' : 'Copy'}
+                            </Button>
+                          </div>
+                        </div>
+                        {chapter.storyPrompt ? (
+                          <TextArea
+                            label="Generated prompt"
+                            value={chapter.storyPrompt}
+                            onChange={(event) =>
+                              updateChapter(chapter.id, {
+                                storyPrompt: event.currentTarget.value,
+                              })
+                            }
+                            style={{ minHeight: 160 }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              color: 'var(--color-text-muted)',
+                              fontSize: 'var(--font-sm)',
+                            }}
+                          >
+                            Generate a prompt from this chapter description and its connected story
+                            elements.
+                          </div>
+                        )}
+                      </div>
+                    </Card>
 
                     <div
                       style={{
@@ -512,20 +614,6 @@ export default function PlotLineForm() {
                               }
                               mentionableElements={mentionableElements}
                               minHeight={80}
-                            />
-                            <MentionArea
-                              label="Story Elements"
-                              value={plotPoint.storyElements ?? ''}
-                              onChange={(val, conn) => {
-                                // Merge connections from both AI Prompt and Story Elements
-                                const aiPromptConn = plotPoint.connections || []
-                                const mergedConn = mergeConnections(aiPromptConn, conn)
-                                updatePlotPoint(chapter.id, plotPoint.id, {
-                                  storyElements: val,
-                                }, mergedConn)
-                              }}
-                              mentionableElements={mentionableElements}
-                              minHeight={60}
                             />
                           </div>
                         </Card>

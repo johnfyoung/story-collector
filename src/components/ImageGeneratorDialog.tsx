@@ -1,69 +1,90 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from 'react'
-import type { Character, StoryContent } from '../types'
-import { buildImagePrompt, validatePrompt } from '../lib/imagePromptBuilder'
+import { useState, useEffect } from "react";
+import type { Character, StoryContent } from "../types";
+import { buildImagePrompt, validatePrompt } from "../lib/imagePromptBuilder";
 import {
   generateImage,
   isOpenAIConfigured,
   estimateCost,
   getDefaultModel,
-} from '../lib/openaiImageGen'
-import type { GenerateImageOptions } from '../lib/openaiImageGen'
-import { Button } from './Button'
-import { TextArea } from './TextArea'
+} from "../lib/openaiImageGen";
+import type { GenerateImageOptions } from "../lib/openaiImageGen";
+import { Button } from "./Button";
+import { TextArea } from "./TextArea";
 
 type ImageGeneratorDialogProps = {
-  character: Pick<Character, 'name' | 'shortDescription' | 'descriptors'>
-  storyContent?: StoryContent
-  onClose: () => void
-  onImageGenerated: (imageUrl: string, prompt: string) => void
-}
+  character: Pick<Character, "name" | "shortDescription" | "descriptors">;
+  storyContent?: StoryContent;
+  referenceImages?: string[];
+  onClose: () => void;
+  onImageGenerated: (imageUrl: string, prompt: string) => void;
+};
 
 export function ImageGeneratorDialog({
   character,
   storyContent,
+  referenceImages = [],
   onClose,
   onImageGenerated,
 }: ImageGeneratorDialogProps) {
-  const [step, setStep] = useState<'configure' | 'generating' | 'preview'>('configure')
-  const [prompt, setPrompt] = useState('')
+  const [step, setStep] = useState<"configure" | "generating" | "preview">(
+    "configure"
+  );
+  const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<
-    'portrait' | 'fantasy-art' | 'realistic-photo' | 'anime' | 'oil-painting' | 'digital-art'
-  >('portrait')
-  const [size, setSize] = useState<'1024x1024' | '1792x1024' | '1024x1792'>('1024x1024')
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
-  const [revisedPrompt, setRevisedPrompt] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+    | "portrait"
+    | "fantasy-art"
+    | "realistic-photo"
+    | "anime"
+    | "oil-painting"
+    | "digital-art"
+  >("portrait");
+  const [size, setSize] = useState<"1024x1024" | "1792x1024" | "1024x1792">(
+    "1024x1024"
+  );
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(
+    null
+  );
+  const [revisedPrompt, setRevisedPrompt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string>("");
 
-  const model = getDefaultModel()
+  const model = getDefaultModel();
 
   // Set default quality based on model
-  const defaultQuality = model === 'gpt-image-1' ? 'medium' : 'standard'
-  const [quality, setQuality] = useState<string>(defaultQuality)
+  const defaultQuality = model === "gpt-image-1" ? "medium" : "standard";
+  const [quality, setQuality] = useState<string>(defaultQuality);
 
-  const estimatedCost = estimateCost(model, quality as any, size)
+  const estimatedCost = estimateCost(model, quality as any, size);
+  const availableReferenceImages = referenceImages
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
 
   useEffect(() => {
     const initialPrompt = buildImagePrompt(character, {
       style,
-      quality: quality === 'hd' ? 'ultra' : 'high',
+      quality: quality === "hd" ? "ultra" : "high",
       storyContent,
-    })
-    setPrompt(initialPrompt)
-  }, [character, style, quality, storyContent])
+    });
+    setPrompt(initialPrompt);
+  }, [character, style, quality, storyContent]);
 
   const handleGenerate = async () => {
-    setError(null)
+    setError(null);
 
-    const validation = validatePrompt(prompt)
+    const validation = validatePrompt(prompt);
     if (!validation.valid) {
-      setError(validation.error || 'Invalid prompt')
-      return
+      setError(validation.error || "Invalid prompt");
+      return;
+    }
+    if (referenceImageUrl && model === "dall-e-3") {
+      setError("Reference images are not supported with the DALL-E 3 model");
+      return;
     }
 
-    setIsGenerating(true)
-    setStep('generating')
+    setIsGenerating(true);
+    setStep("generating");
 
     try {
       const options: GenerateImageOptions = {
@@ -71,119 +92,120 @@ export function ImageGeneratorDialog({
         size,
         quality: quality as any,
         model,
-      }
+        referenceImageUrl: referenceImageUrl || undefined,
+      };
 
-      const result = await generateImage(options)
-      setGeneratedImageUrl(result.url)
-      setRevisedPrompt(result.revisedPrompt || null)
-      setStep('preview')
+      const result = await generateImage(options);
+      setGeneratedImageUrl(result.url);
+      setRevisedPrompt(result.revisedPrompt || null);
+      setStep("preview");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate image')
-      setStep('configure')
+      setError(err instanceof Error ? err.message : "Failed to generate image");
+      setStep("configure");
     } finally {
-      setIsGenerating(false)
+      setIsGenerating(false);
     }
-  }
+  };
 
   const handleAccept = () => {
     if (generatedImageUrl) {
-      onImageGenerated(generatedImageUrl, prompt)
-      onClose()
+      onImageGenerated(generatedImageUrl, prompt);
+      onClose();
     }
-  }
+  };
 
   const handleRegenerate = () => {
-    setGeneratedImageUrl(null)
-    setRevisedPrompt(null)
-    setStep('configure')
-  }
+    setGeneratedImageUrl(null);
+    setRevisedPrompt(null);
+    setStep("configure");
+  };
 
   if (!isOpenAIConfigured()) {
     return (
       <div
         style={{
-          position: 'fixed',
+          position: "fixed",
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           zIndex: 1000,
         }}
         onClick={onClose}
       >
         <div
           style={{
-            background: 'var(--color-surface)',
-            borderRadius: 'var(--radius-md)',
+            background: "var(--color-surface)",
+            borderRadius: "var(--radius-md)",
             padding: 24,
             maxWidth: 500,
             margin: 16,
-            border: '1px solid var(--color-border)',
+            border: "1px solid var(--color-border)",
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 style={{ color: 'var(--color-text)', margin: '0 0 12px 0' }}>
+          <h2 style={{ color: "var(--color-text)", margin: "0 0 12px 0" }}>
             OpenAI Not Configured
           </h2>
-          <p style={{ color: 'var(--color-text-muted)', margin: '0 0 16px 0' }}>
-            To use AI image generation, you need to configure your OpenAI API key. Add
-            VITE_OPENAI_API_KEY to your environment variables.
+          <p style={{ color: "var(--color-text-muted)", margin: "0 0 16px 0" }}>
+            To use AI image generation, you need to configure your OpenAI API
+            key. Add VITE_OPENAI_API_KEY to your environment variables.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button onClick={onClose}>Close</Button>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div
       style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        background: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         zIndex: 1000,
-        overflowY: 'auto',
+        overflowY: "auto",
       }}
       onClick={onClose}
     >
       <div
         style={{
-          background: 'var(--color-surface)',
-          borderRadius: 'var(--radius-md)',
+          background: "var(--color-surface)",
+          borderRadius: "var(--radius-md)",
           padding: 24,
           maxWidth: 700,
-          width: '100%',
+          width: "100%",
           margin: 16,
-          border: '1px solid var(--color-border)',
-          maxHeight: 'calc(100vh - 32px)',
-          overflowY: 'auto',
+          border: "1px solid var(--color-border)",
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ color: 'var(--color-text)', margin: '0 0 16px 0' }}>
+        <h2 style={{ color: "var(--color-text)", margin: "0 0 16px 0" }}>
           Generate AI Image
         </h2>
 
-        {step === 'configure' && (
+        {step === "configure" && (
           <>
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: "grid", gap: 16 }}>
               <div>
                 <label
                   style={{
-                    display: 'block',
-                    color: 'var(--color-text)',
+                    display: "block",
+                    color: "var(--color-text)",
                     marginBottom: 8,
                     fontWeight: 500,
                   }}
@@ -198,21 +220,100 @@ export function ImageGeneratorDialog({
                 />
                 <div
                   style={{
-                    color: 'var(--color-text-muted)',
-                    fontSize: 'var(--font-sm)',
+                    color: "var(--color-text-muted)",
+                    fontSize: "var(--font-sm)",
                     marginTop: 4,
                   }}
                 >
-                  This prompt was auto-generated from appearance attributes. You can edit it
-                  freely.
+                  This prompt was auto-generated from appearance attributes. You
+                  can edit it freely.
                 </div>
               </div>
+
+              {availableReferenceImages.length > 0 && (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "block",
+                        color: "var(--color-text)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Reference image (Select One)
+                    </label>
+                    {model === "dall-e-3" && referenceImageUrl ? (
+                      <div
+                        style={{
+                          color: "crimson",
+                          fontSize: "var(--font-sm)",
+                        }}
+                      >
+                        DALL-E 3 does not support reference images.
+                      </div>
+                    ) : null}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setReferenceImageUrl("")}
+                      style={{
+                        border: "1px dashed var(--color-border)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "6px 10px",
+                        background: referenceImageUrl
+                          ? "transparent"
+                          : "var(--color-bg)",
+                        color: "var(--color-text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      None
+                    </button>
+                    {availableReferenceImages.map((url) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => setReferenceImageUrl(url)}
+                        style={{
+                          border:
+                            referenceImageUrl === url
+                              ? "2px solid var(--color-primary)"
+                              : "1px solid var(--color-border)",
+                          borderRadius: "var(--radius-sm)",
+                          padding: 2,
+                          background: "transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <img
+                          src={url}
+                          alt="Reference"
+                          style={{
+                            width: 72,
+                            height: 72,
+                            objectFit: "cover",
+                            display: "block",
+                            borderRadius: "var(--radius-sm)",
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label
                   style={{
-                    display: 'block',
-                    color: 'var(--color-text)',
+                    display: "block",
+                    color: "var(--color-text)",
                     marginBottom: 8,
                     fontWeight: 500,
                   }}
@@ -222,17 +323,15 @@ export function ImageGeneratorDialog({
                 <select
                   value={style}
                   onChange={(e) =>
-                    setStyle(
-                      e.currentTarget.value as typeof style
-                    )
+                    setStyle(e.currentTarget.value as typeof style)
                   }
                   style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'var(--color-surface)',
-                    color: 'var(--color-text)',
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--color-surface)",
+                    color: "var(--color-text)",
                   }}
                 >
                   <option value="portrait">Portrait</option>
@@ -244,12 +343,18 @@ export function ImageGeneratorDialog({
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
                 <div>
                   <label
                     style={{
-                      display: 'block',
-                      color: 'var(--color-text)',
+                      display: "block",
+                      color: "var(--color-text)",
                       marginBottom: 8,
                       fontWeight: 500,
                     }}
@@ -260,15 +365,15 @@ export function ImageGeneratorDialog({
                     value={quality}
                     onChange={(e) => setQuality(e.currentTarget.value)}
                     style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'var(--color-surface)',
-                      color: 'var(--color-text)',
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--color-surface)",
+                      color: "var(--color-text)",
                     }}
                   >
-                    {model === 'gpt-image-1' ? (
+                    {model === "gpt-image-1" ? (
                       <>
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
@@ -286,8 +391,8 @@ export function ImageGeneratorDialog({
                 <div>
                   <label
                     style={{
-                      display: 'block',
-                      color: 'var(--color-text)',
+                      display: "block",
+                      color: "var(--color-text)",
                       marginBottom: 8,
                       fontWeight: 500,
                     }}
@@ -296,14 +401,16 @@ export function ImageGeneratorDialog({
                   </label>
                   <select
                     value={size}
-                    onChange={(e) => setSize(e.currentTarget.value as typeof size)}
+                    onChange={(e) =>
+                      setSize(e.currentTarget.value as typeof size)
+                    }
                     style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'var(--color-surface)',
-                      color: 'var(--color-text)',
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--color-surface)",
+                      color: "var(--color-text)",
                     }}
                   >
                     <option value="1024x1024">Square (1024×1024)</option>
@@ -316,23 +423,28 @@ export function ImageGeneratorDialog({
               <div
                 style={{
                   padding: 12,
-                  background: 'var(--color-background)',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-border)',
+                  background: "var(--color-background)",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--color-border)",
                 }}
               >
-                <div style={{ color: 'var(--color-text)', fontSize: 'var(--font-sm)' }}>
-                  <strong>Model:</strong>{' '}
-                  {model === 'dall-e-3'
-                    ? 'DALL-E 3'
-                    : model === 'gpt-image-1'
-                    ? 'GPT Image 1'
-                    : 'DALL-E 2'}
+                <div
+                  style={{
+                    color: "var(--color-text)",
+                    fontSize: "var(--font-sm)",
+                  }}
+                >
+                  <strong>Model:</strong>{" "}
+                  {model === "dall-e-3"
+                    ? "DALL-E 3"
+                    : model === "gpt-image-1"
+                    ? "GPT Image 1"
+                    : "DALL-E 2"}
                 </div>
                 <div
                   style={{
-                    color: 'var(--color-text-muted)',
-                    fontSize: 'var(--font-sm)',
+                    color: "var(--color-text-muted)",
+                    fontSize: "var(--font-sm)",
                     marginTop: 4,
                   }}
                 >
@@ -344,10 +456,10 @@ export function ImageGeneratorDialog({
                 <div
                   style={{
                     padding: 12,
-                    background: '#fee',
-                    border: '1px solid #fcc',
-                    borderRadius: 'var(--radius-sm)',
-                    color: '#c00',
+                    background: "#fee",
+                    border: "1px solid #fcc",
+                    borderRadius: "var(--radius-sm)",
+                    color: "#c00",
                   }}
                 >
                   {error}
@@ -357,9 +469,9 @@ export function ImageGeneratorDialog({
 
             <div
               style={{
-                display: 'flex',
+                display: "flex",
                 gap: 8,
-                justifyContent: 'flex-end',
+                justifyContent: "flex-end",
                 marginTop: 24,
               }}
             >
@@ -373,37 +485,37 @@ export function ImageGeneratorDialog({
           </>
         )}
 
-        {step === 'generating' && (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        {step === "generating" && (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div
               style={{
-                color: 'var(--color-text)',
-                fontSize: 'var(--font-lg)',
+                color: "var(--color-text)",
+                fontSize: "var(--font-lg)",
                 marginBottom: 16,
               }}
             >
               Generating your image...
             </div>
-            <div style={{ color: 'var(--color-text-muted)' }}>
+            <div style={{ color: "var(--color-text-muted)" }}>
               This may take 10-30 seconds
             </div>
           </div>
         )}
 
-        {step === 'preview' && generatedImageUrl && (
+        {step === "preview" && generatedImageUrl && (
           <>
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: "grid", gap: 16 }}>
               <div
                 style={{
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  overflow: 'hidden',
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-sm)",
+                  overflow: "hidden",
                 }}
               >
                 <img
                   src={generatedImageUrl}
                   alt="Generated character"
-                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                  style={{ width: "100%", height: "auto", display: "block" }}
                 />
               </div>
 
@@ -411,15 +523,15 @@ export function ImageGeneratorDialog({
                 <div
                   style={{
                     padding: 12,
-                    background: 'var(--color-background)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-border)',
+                    background: "var(--color-background)",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--color-border)",
                   }}
                 >
                   <div
                     style={{
-                      color: 'var(--color-text)',
-                      fontSize: 'var(--font-sm)',
+                      color: "var(--color-text)",
+                      fontSize: "var(--font-sm)",
                       fontWeight: 500,
                       marginBottom: 4,
                     }}
@@ -428,8 +540,8 @@ export function ImageGeneratorDialog({
                   </div>
                   <div
                     style={{
-                      color: 'var(--color-text-muted)',
-                      fontSize: 'var(--font-sm)',
+                      color: "var(--color-text-muted)",
+                      fontSize: "var(--font-sm)",
                     }}
                   >
                     {revisedPrompt}
@@ -439,20 +551,21 @@ export function ImageGeneratorDialog({
 
               <div
                 style={{
-                  color: 'var(--color-text-muted)',
-                  fontSize: 'var(--font-sm)',
+                  color: "var(--color-text-muted)",
+                  fontSize: "var(--font-sm)",
                 }}
               >
-                The generated image will be uploaded to Cloudinary and added to your
-                character's images. The prompt will be saved to the AI Image Prompt field.
+                The generated image will be uploaded to Cloudinary and added to
+                your character's images. The prompt will be saved to the AI
+                Image Prompt field.
               </div>
             </div>
 
             <div
               style={{
-                display: 'flex',
+                display: "flex",
                 gap: 8,
-                justifyContent: 'flex-end',
+                justifyContent: "flex-end",
                 marginTop: 24,
               }}
             >
@@ -465,5 +578,5 @@ export function ImageGeneratorDialog({
         )}
       </div>
     </div>
-  )
+  );
 }

@@ -6,6 +6,7 @@ import Characters from './routes/Characters'
 import CharacterForm from './routes/CharacterForm'
 import Locations from './routes/Locations'
 import Items from './routes/Items'
+import ItemForm from './routes/ItemForm'
 import PlotLines from './routes/PlotLines'
 import PlotLineForm from './routes/PlotLineForm'
 import Species from './routes/Species'
@@ -57,6 +58,8 @@ export default function App() {
             <Route path=":id/groups/new" element={<GroupForm />} />
             <Route path=":id/groups/:elemId/edit" element={<GroupForm />} />
             <Route path=":id/items" element={<Items />} />
+            <Route path=":id/items/new" element={<ItemForm />} />
+            <Route path=":id/items/:elemId/edit" element={<ItemForm />} />
             <Route path=":id/languages" element={<Languages />} />
             <Route path=":id/languages/new" element={<LanguageForm />} />
             <Route path=":id/languages/:elemId/edit" element={<LanguageForm />} />

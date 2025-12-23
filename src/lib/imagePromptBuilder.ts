@@ -151,34 +151,38 @@ function resolveLinkedDescriptors(
   const merged = [...descriptors]
   const existingKeys = new Set(descriptors.map((d) => d.key))
 
-  // Extract all @mentions from all descriptor values
-  const allMentions = new Set<string>()
-  for (const descriptor of descriptors) {
-    if (descriptor.value && typeof descriptor.value === 'string') {
-      const mentions = extractMentions(descriptor.value)
-      mentions.forEach((m) => allMentions.add(m))
+  // Only include @mentioned element descriptors for non-characters to avoid
+  // leaking other characters' appearances into character prompts.
+  if (elementType !== 'character') {
+    // Extract all @mentions from all descriptor values
+    const allMentions = new Set<string>()
+    for (const descriptor of descriptors) {
+      if (descriptor.value && typeof descriptor.value === 'string') {
+        const mentions = extractMentions(descriptor.value)
+        mentions.forEach((m) => allMentions.add(m))
+      }
     }
-  }
 
-  // Resolve @mentioned elements and merge their appearance descriptors
-  for (const mentionName of allMentions) {
-    const element = findElementByName(mentionName, storyContent)
-    if (element?.descriptors) {
-      // Add appearance/visual descriptors from mentioned element
-      for (const desc of element.descriptors) {
-        const isVisualKey = [
-          'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
-          'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity',
-          'clothingStyle', 'accessories', 'tattoos', 'scars',
-          // For locations
-          'architecturalStyle', 'landscape', 'climate',
-          // For species
-          'physiology', 'anatomy'
-        ].includes(desc.key)
+    // Resolve @mentioned elements and merge their appearance descriptors
+    for (const mentionName of allMentions) {
+      const element = findElementByName(mentionName, storyContent)
+      if (element?.descriptors) {
+        // Add appearance/visual descriptors from mentioned element
+        for (const desc of element.descriptors) {
+          const isVisualKey = [
+            'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
+            'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity',
+            'clothingStyle', 'accessories', 'tattoos', 'scars',
+            // For locations
+            'architecturalStyle', 'landscape', 'climate',
+            // For species
+            'physiology', 'anatomy'
+          ].includes(desc.key)
 
-        if (isVisualKey && !existingKeys.has(desc.key) && desc.value) {
-          merged.push({ ...desc })
-          existingKeys.add(desc.key)
+          if (isVisualKey && !existingKeys.has(desc.key) && desc.value) {
+            merged.push({ ...desc })
+            existingKeys.add(desc.key)
+          }
         }
       }
     }
@@ -186,24 +190,28 @@ function resolveLinkedDescriptors(
 
   // For characters, resolve species link (direct descriptor, not @mention)
   if (elementType === 'character') {
-    const speciesName = getDescriptorValue(descriptors, 'species')
-    if (speciesName) {
-      const speciesElement = storyContent.species.find(
-        (s) => s.name.toLowerCase() === speciesName.toLowerCase()
-      )
-      if (speciesElement?.descriptors) {
-        // Merge species descriptors that don't exist in character
-        for (const speciesDesc of speciesElement.descriptors) {
-          // Only add appearance-related descriptors from species
-          const isAppearanceKey = [
-            'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
-            'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity'
-          ].includes(speciesDesc.key)
+    const speciesDescriptor = descriptors.find((d) => d.key === 'species')
+    const speciesConnection = speciesDescriptor?.connections?.find((conn) => conn.type === 'species')
+    const speciesName = normalizeMentionValue(speciesDescriptor?.value ?? getDescriptorValue(descriptors, 'species') ?? undefined)
+    const speciesElement = speciesConnection
+      ? storyContent.species.find((s) => s.id === speciesConnection.id)
+      : speciesName
+      ? storyContent.species.find(
+          (s) => s.name.toLowerCase() === speciesName.toLowerCase()
+        )
+      : undefined
+    if (speciesElement?.descriptors) {
+      // Merge species descriptors that don't exist in character
+      for (const speciesDesc of speciesElement.descriptors) {
+        // Only add appearance-related descriptors from species
+        const isAppearanceKey = [
+          'bodyType', 'height', 'skinTone', 'eyeColor', 'hairColor',
+          'distinguishingFeature', 'hairstyle', 'weight', 'ethnicity'
+        ].includes(speciesDesc.key)
 
-          if (isAppearanceKey && !existingKeys.has(speciesDesc.key) && speciesDesc.value) {
-            merged.push({ ...speciesDesc })
-            existingKeys.add(speciesDesc.key)
-          }
+        if (isAppearanceKey && !existingKeys.has(speciesDesc.key) && speciesDesc.value) {
+          merged.push({ ...speciesDesc })
+          existingKeys.add(speciesDesc.key)
         }
       }
     }
@@ -217,11 +225,15 @@ function resolveLinkedDescriptors(
       if (locationElement?.descriptors) {
         // Add context from birthplace if available
         const architecturalStyle = getDescriptorValue(locationElement.descriptors || [], 'architecturalStyle')
+        const typicalDress = getDescriptorValue(locationElement.descriptors || [], 'typicalDress')
 
         if (architecturalStyle && !existingKeys.has('clothingStyle')) {
           // Infer clothing style from birthplace architecture
           const clothingHint = `${architecturalStyle} influenced attire`
           merged.push({ id: 'inferred-clothing', key: 'clothingStyle', value: clothingHint })
+        }
+        if (typicalDress && !existingKeys.has('clothingStyle')) {
+          merged.push({ id: 'birthplace-typical-dress', key: 'clothingStyle', value: typicalDress })
         }
       }
     }
@@ -403,6 +415,17 @@ function getDescriptorValue(
   if (!descriptor?.value) return null
   const trimmed = descriptor.value.trim()
   return trimmed || null
+}
+
+function normalizeMentionValue(value?: string): string | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (trimmed.includes('@')) {
+    const mentions = extractMentions(trimmed)
+    return mentions[0] ?? trimmed.replace(/^@+/, '').trim()
+  }
+  return trimmed
 }
 
 /**

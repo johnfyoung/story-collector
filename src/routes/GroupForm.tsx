@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
@@ -11,7 +11,7 @@ import type { Descriptor, DescriptorKey, NamedElement, StoryContent, ElementConn
 import { Disclosure } from '../components/Disclosure'
 import { AttributePicker } from '../components/AttributePicker'
 import { ImagesField } from '../components/ImagesField'
-import { parseImageValue } from '../lib/descriptorImages'
+import { parseImageValue, stringifyImageValue } from '../lib/descriptorImages'
 import { addRecentEdit } from '../lib/recentEdits'
 import {
   extractConnectionsFromText,
@@ -37,6 +37,8 @@ export default function GroupForm() {
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
   const [descriptors, setDescriptors] = useState<Descriptor[]>([])
+  const [highlightedDescriptorId, setHighlightedDescriptorId] = useState<string | null>(null)
+  const descriptorRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [shortDescConnections, setShortDescConnections] = useState<ElementConnection[]>([])
   const [longDescConnections, setLongDescConnections] = useState<ElementConnection[]>([])
 
@@ -114,6 +116,48 @@ export default function GroupForm() {
     return imagesDescriptor ? parseImageValue(imagesDescriptor.value) : []
   }, [descriptors])
 
+  const handleAvatarChange = (nextUrl: string) => {
+    const previousUrl = avatarUrl
+    setAvatarUrl(nextUrl)
+    if (!nextUrl) return
+    setDescriptors((prev) => {
+      const imagesDescriptor = prev.find((d) => d.key === 'images')
+      const images = imagesDescriptor ? parseImageValue(imagesDescriptor.value) : []
+      const nextImages = [...images]
+      if (previousUrl && !nextImages.includes(previousUrl)) {
+        nextImages.unshift(previousUrl)
+      }
+      if (!nextImages.includes(nextUrl)) {
+        nextImages.unshift(nextUrl)
+      }
+      const nextValue = stringifyImageValue(nextImages)
+      if (imagesDescriptor) {
+        return prev.map((d) =>
+          d.id === imagesDescriptor.id ? { ...d, value: nextValue } : d
+        )
+      }
+      return [
+        ...prev,
+        { id: genId(), key: 'images', value: nextValue },
+      ]
+    })
+  }
+
+  const addDescriptor = (key: DescriptorKey) => {
+    let nextHighlightId: string | null = null
+    setDescriptors((prev) => {
+      const existing = prev.find((d) => d.key === key)
+      if (existing) {
+        nextHighlightId = existing.id
+        return prev
+      }
+      const id = genId()
+      nextHighlightId = id
+      return [...prev, { id, key, value: '' }]
+    })
+    if (nextHighlightId) setHighlightedDescriptorId(nextHighlightId)
+  }
+
   const mapElementsForKey = (key: DescriptorKey): MentionableElement[] => {
     switch (key) {
       // Locations
@@ -170,10 +214,26 @@ export default function GroupForm() {
         })
       }
 
+      setHighlightedDescriptorId(null)
       navigate(`/stories/${storyId}/groups`)
     } finally {
       setSaving(false)
     }
+  }
+
+  useEffect(() => {
+    if (!highlightedDescriptorId) return
+    const target = descriptorRefs.current[highlightedDescriptorId]
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightedDescriptorId, descriptors])
+
+  const highlightStyle = {
+    outline: '2px solid var(--color-primary)',
+    outlineOffset: 2,
+    borderRadius: 8,
+    background: 'rgba(184, 132, 224, 0.08)',
   }
 
   if (!storyId) return null
@@ -184,7 +244,7 @@ export default function GroupForm() {
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Avatar name={name} url={avatarUrl} size={56} editable onChange={setAvatarUrl} availableImages={availableImages} />
+            <Avatar name={name} url={avatarUrl} size={250} editable onChange={handleAvatarChange} availableImages={availableImages} />
             <div style={{ flex: 1, display: 'grid', gap: 8 }}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <MentionArea label="Short description" value={shortDesc} onChange={(v, conn) => { setShortDesc(v); setShortDescConnections(conn); }} mentionableElements={mentionableElements} maxChars={160} />
@@ -198,7 +258,7 @@ export default function GroupForm() {
           <AttributePicker
             categories={getGroupCategories()}
             chosenKeys={descriptors.map((d) => d.key)}
-            onAdd={(key) => setDescriptors((prev) => (prev.some((d) => d.key === key) ? prev : [...prev, { id: genId(), key, value: '' }]))}
+            onAdd={addDescriptor}
           />
 
           {getGroupCategories().map((cat) => {
@@ -210,42 +270,61 @@ export default function GroupForm() {
                   {items.map((d) => {
                     const label = cat.items.find((i) => i.key === d.key)?.label ?? String(d.key)
                     const elems = mapElementsForKey(d.key)
+                    const isHighlighted = highlightedDescriptorId === d.id
+                    const wrapperProps = {
+                      ref: (el: HTMLDivElement | null) => {
+                        descriptorRefs.current[d.id] = el
+                      },
+                      style: isHighlighted ? highlightStyle : undefined,
+                      onFocusCapture: () => {
+                        if (highlightedDescriptorId === d.id) {
+                          setHighlightedDescriptorId(null)
+                        }
+                      },
+                      onMouseDown: () => {
+                        if (highlightedDescriptorId === d.id) {
+                          setHighlightedDescriptorId(null)
+                        }
+                      },
+                    }
                     if (d.key === 'images') {
                       return (
-                        <ImagesField
-                          key={d.id}
-                          label={label}
-                          value={d.value}
-                          onChange={(next) =>
-                            setDescriptors((prev) =>
-                              prev.map((x) => (x.id === d.id ? { ...x, value: next } : x)),
-                            )
-                          }
-                          mainImageUrl={avatarUrl}
-                          character={{ name, shortDescription: shortDesc, descriptors }}
-                          storyContent={content || undefined}
-                          onPromptSave={(prompt) => {
-                            const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
-                            if (aiPromptDescriptor) {
+                        <div key={d.id} {...wrapperProps}>
+                          <ImagesField
+                            label={label}
+                            value={d.value}
+                            onChange={(next) =>
                               setDescriptors((prev) =>
-                                prev.map((x) => (x.id === aiPromptDescriptor.id ? { ...x, value: prompt } : x))
+                                prev.map((x) => (x.id === d.id ? { ...x, value: next } : x)),
                               )
-                            } else {
-                              setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
                             }
-                          }}
-                        />
+                            mainImageUrl={avatarUrl}
+                            character={{ name, shortDescription: shortDesc, descriptors }}
+                            storyContent={content || undefined}
+                            onPromptSave={(prompt) => {
+                              const aiPromptDescriptor = descriptors.find((d) => d.key === 'aiImagePrompt')
+                              if (aiPromptDescriptor) {
+                                setDescriptors((prev) =>
+                                  prev.map((x) => (x.id === aiPromptDescriptor.id ? { ...x, value: prompt } : x))
+                                )
+                              } else {
+                                setDescriptors([...descriptors, { id: genId(), key: 'aiImagePrompt', value: prompt }])
+                              }
+                            }}
+                          />
+                        </div>
                       )
                     }
                     return (
-                      <MentionArea
-                        key={d.id}
-                        label={label}
-                        value={d.value}
-                        onChange={(v, conn) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v, connections: conn } : x)))}
-                        mentionableElements={elems}
-                        minHeight={40}
-                      />
+                      <div key={d.id} {...wrapperProps}>
+                        <MentionArea
+                          label={label}
+                          value={d.value}
+                          onChange={(v, conn) => setDescriptors((prev) => prev.map((x) => (x.id === d.id ? { ...x, value: v, connections: conn } : x)))}
+                          mentionableElements={elems}
+                          minHeight={40}
+                        />
+                      </div>
                     )
                   })}
                 </div>
@@ -254,7 +333,14 @@ export default function GroupForm() {
           })}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <Button variant="ghost" type="button" onClick={() => navigate(-1)}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => {
+                setHighlightedDescriptorId(null)
+                navigate(-1)
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={onSave} disabled={saving || !name.trim()}>

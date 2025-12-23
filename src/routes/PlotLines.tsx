@@ -15,7 +15,7 @@ export default function PlotLines() {
   const { loadContent } = useStories();
   const [content, setContent] = useState<StoryContent | null>(null);
   const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortBy>('none');
+  const [sortBy, setSortBy] = useState<SortBy>('lastUpdated');
 
   useEffect(() => {
     if (!storyId) return;
