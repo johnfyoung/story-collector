@@ -169,14 +169,15 @@ export class StoriesRemote {
     if (!DB_ID || !STORIES_COLLECTION_ID)
       throw new Error("Remote stories not configured");
     const updatePatch = { ...patch };
+    const updatePayload: Record<string, any> = { ...updatePatch };
     if ("authorStyle" in updatePatch) {
-      updatePatch.authorStyle = serializeAuthorStyle(updatePatch.authorStyle);
+      updatePayload.authorStyle = serializeAuthorStyle(updatePatch.authorStyle);
     }
     const doc = await this.db.updateDocument(
       DB_ID,
       STORIES_COLLECTION_ID,
       id,
-      updatePatch as any
+      updatePayload as any
     );
     return toStory(doc);
   }

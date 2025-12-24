@@ -40,11 +40,14 @@ export default function StoryView() {
     const voice = styleVoice.trim();
     const personality = stylePersonality.trim();
     const notes = styleNotes.trim();
-    const scales = Object.fromEntries(
-      Object.entries(styleScales)
-        .map(([key, value]) => [key, typeof value === "number" ? value : 0])
-        .filter(([, value]) => value > 0)
-    ) as AuthorStyleScales;
+    const scales = Object.entries(styleScales).reduce((acc, [key, value]) => {
+      const numeric =
+        typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        acc[key as keyof AuthorStyleScales] = numeric;
+      }
+      return acc;
+    }, {} as AuthorStyleScales);
     const hasScales = Object.keys(scales).length > 0;
 
     if (!voice && !personality && !notes && !hasScales) return undefined;
