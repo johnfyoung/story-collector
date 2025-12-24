@@ -203,7 +203,9 @@ export default function CharacterForm() {
   const [descriptors, setDescriptors] = useState<Descriptor[]>([]);
   const [saving, setSaving] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-  const [highlightedDescriptorId, setHighlightedDescriptorId] = useState<string | null>(null);
+  const [highlightedDescriptorId, setHighlightedDescriptorId] = useState<
+    string | null
+  >(null);
   const descriptorRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [shortDescConnections, setShortDescConnections] = useState<
     ElementConnection[]
@@ -325,7 +327,9 @@ export default function CharacterForm() {
     if (!nextUrl) return;
     setDescriptors((prev) => {
       const imagesDescriptor = prev.find((d) => d.key === "images");
-      const images = imagesDescriptor ? parseImageValue(imagesDescriptor.value) : [];
+      const images = imagesDescriptor
+        ? parseImageValue(imagesDescriptor.value)
+        : [];
       const nextImages = [...images];
       if (previousUrl && !nextImages.includes(previousUrl)) {
         nextImages.unshift(previousUrl);
@@ -339,10 +343,7 @@ export default function CharacterForm() {
           d.id === imagesDescriptor.id ? { ...d, value: nextValue } : d
         );
       }
-      return [
-        ...prev,
-        { id: genId(), key: "images", value: nextValue },
-      ];
+      return [...prev, { id: genId(), key: "images", value: nextValue }];
     });
   };
 
@@ -692,6 +693,7 @@ export default function CharacterForm() {
                       "species",
                       "birthplace",
                       "primaryLanguage",
+                      "originCountry",
                       "secondaryLanguages",
                       "pets",
                       "children",
@@ -704,16 +706,18 @@ export default function CharacterForm() {
                       "storyRole",
                       "shortTermGoals",
                       "longTermGoals",
+                      "languageFluency",
                     ];
                     const isMention = mentionKeys.includes(d.key);
                     if (isMention) {
                       const elems =
-                        d.key === "birthplace"
+                        d.key === "birthplace" || d.key === "originCountry"
                           ? locationElements
                           : d.key === "species"
                           ? speciesElements
                           : d.key === "primaryLanguage" ||
-                            d.key === "secondaryLanguages"
+                            d.key === "secondaryLanguages" ||
+                            d.key === "languageFluency"
                           ? languageElements
                           : d.key === "storyRole" ||
                             d.key === "shortTermGoals" ||
@@ -752,7 +756,9 @@ export default function CharacterForm() {
                         <MentionArea
                           label={label}
                           value={d.value}
-                          onChange={(v, conn) => updateDescriptor(d.id, v, conn)}
+                          onChange={(v, conn) =>
+                            updateDescriptor(d.id, v, conn)
+                          }
                           mentionableElements={mentionableElements}
                         />
                       </div>
