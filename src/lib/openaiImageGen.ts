@@ -1,7 +1,8 @@
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY as string | undefined
-const OPENAI_IMAGE_MODEL = import.meta.env.VITE_OPENAI_IMAGE_MODEL as
-  | string
-  | undefined
+import { Functions, ExecutionMethod } from 'appwrite'
+import { client } from './appwrite'
+
+const FUNCTION_ID = import.meta.env.VITE_APPWRITE_IMAGE_FUNCTION_ID as string | undefined
+const OPENAI_IMAGE_MODEL = import.meta.env.VITE_OPENAI_IMAGE_MODEL as string | undefined
 
 type ImageSize = '1024x1024' | '1792x1024' | '1024x1792'
 type DalleQuality = 'standard' | 'hd'
@@ -17,34 +18,18 @@ export type GenerateImageOptions = {
   referenceImageUrl?: string
 }
 
-type OpenAIImageResponse = {
-  created: number
-  data: Array<{
-    url?: string
-    b64_json?: string
-    revised_prompt?: string
-  }>
-}
-
-/**
- * Checks if OpenAI image generation is configured
- */
 export function isOpenAIConfigured(): boolean {
-  return Boolean(OPENAI_API_KEY)
+  return Boolean(FUNCTION_ID)
 }
 
-/**
- * Generates an image using OpenAI's image generation API
- */
 export async function generateImage(
   options: GenerateImageOptions
 ): Promise<{ url: string; revisedPrompt?: string }> {
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key is not configured')
+    throw new Error('Image generation function is not configured (VITE_APPWRITE_IMAGE_FUNCTION_ID missing)')
   }
 
-  const model = options.model || (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3'
-
+  const model = (options.model ?? OPENAI_IMAGE_MODEL ?? 'gpt-image-1') as ImageModel
   const {
     prompt,
     size = '1024x1024',
@@ -56,202 +41,70 @@ export async function generateImage(
     throw new Error('Prompt is required')
   }
 
-  try {
-    const response = referenceImageUrl
-      ? await generateImageWithReference({
-          model,
-          prompt: prompt.trim(),
-          size,
-          quality,
-          referenceImageUrl,
-        })
-      : await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify(buildGenerationBody(model, prompt.trim(), size, quality)),
-        })
+  const functions = new Functions(client)
+  const execution = await functions.createExecution(
+    FUNCTION_ID!,
+    JSON.stringify({ prompt: prompt.trim(), model, size, quality, referenceImageUrl }),
+    false,
+    '/',
+    ExecutionMethod.POST,
+    { 'Content-Type': 'application/json' }
+  )
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      let errorMessage = 'Failed to generate image'
-
-      try {
-        const errorData = JSON.parse(errorText) as {
-          error?: { message?: string; code?: string }
-        }
-        if (errorData.error?.message) {
-          errorMessage = errorData.error.message
-        }
-      } catch {
-        if (errorText) {
-          errorMessage = `${errorMessage}: ${errorText.substring(0, 200)}`
-        }
-      }
-
-      throw new Error(errorMessage)
-    }
-
-    const data = (await response.json()) as OpenAIImageResponse
-
-    if (!data.data || data.data.length === 0) {
-      throw new Error('No image returned from OpenAI')
-    }
-
-    const imageData = data.data[0]
-
-    // Handle both URL and base64 responses
-    let imageUrl: string
-    if (imageData.url) {
-      imageUrl = imageData.url
-    } else if (imageData.b64_json) {
-      // Convert base64 to data URL
-      imageUrl = `data:image/png;base64,${imageData.b64_json}`
-    } else {
-      throw new Error('Image URL or data not found in response')
-    }
-
-    return {
-      url: imageUrl,
-      revisedPrompt: imageData.revised_prompt,
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error
-    }
-    throw new Error('Unknown error occurred while generating image')
+  if (execution.responseStatusCode >= 400) {
+    let message = 'Image generation failed'
+    try {
+      const body = JSON.parse(execution.responseBody) as { error?: string }
+      if (body.error) message = body.error
+    } catch { /* ignore */ }
+    throw new Error(message)
   }
+
+  const data = JSON.parse(execution.responseBody) as {
+    url?: string
+    b64_json?: string
+    revisedPrompt?: string
+    error?: string
+  }
+
+  if (data.error) throw new Error(data.error)
+
+  let imageUrl: string
+  if (data.url) {
+    imageUrl = data.url
+  } else if (data.b64_json) {
+    imageUrl = `data:image/png;base64,${data.b64_json}`
+  } else {
+    throw new Error('No image URL or data in response')
+  }
+
+  return { url: imageUrl, revisedPrompt: data.revisedPrompt }
 }
 
-function buildGenerationBody(
-  model: ImageModel,
-  prompt: string,
-  size: ImageSize,
-  quality: ImageQuality
-): Record<string, unknown> {
-  const requestBody: Record<string, unknown> = {
-    model,
-    prompt,
-    n: 1,
-    size,
-  }
-
-  // DALL-E 3 and gpt-image-1 support quality parameter
-  if (model === 'dall-e-3' || model === 'gpt-image-1') {
-    requestBody.quality = quality
-  }
-
-  return requestBody
-}
-
-async function generateImageWithReference(options: {
-  model: ImageModel
-  prompt: string
-  size: ImageSize
-  quality: ImageQuality
-  referenceImageUrl: string
-}): Promise<Response> {
-  const { model, prompt, size, quality, referenceImageUrl } = options
-
-  if (model === 'dall-e-3') {
-    throw new Error('Reference images are not supported with the DALL-E 3 model')
-  }
-
-  const imageResponse = await fetch(referenceImageUrl)
-  if (!imageResponse.ok) {
-    throw new Error('Failed to download reference image')
-  }
-
-  const blob = await imageResponse.blob()
-  const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
-
-  const form = new FormData()
-  form.append('model', model)
-  form.append('prompt', prompt)
-  form.append('n', '1')
-  form.append('size', size)
-  form.append('image', file)
-
-  if (model === 'gpt-image-1') {
-    form.append('quality', String(quality))
-  }
-
-  return fetch('https://api.openai.com/v1/images/edits', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: form,
-  })
-}
-
-/**
- * Gets the default model based on environment configuration
- */
 export function getDefaultModel(): ImageModel {
-  return (OPENAI_IMAGE_MODEL as ImageModel) || 'dall-e-3'
+  return (OPENAI_IMAGE_MODEL as ImageModel) ?? 'gpt-image-1'
 }
 
-/**
- * Gets available quality options for a given model
- */
 export function getAvailableQualities(model: ImageModel): ImageQuality[] {
-  if (model === 'gpt-image-1') {
-    return ['low', 'medium', 'high']
-  }
-  // DALL-E 2 and DALL-E 3 use standard/hd
+  if (model === 'gpt-image-1') return ['low', 'medium', 'high']
   return ['standard', 'hd']
 }
 
-/**
- * Gets available sizes for a given model
- */
 export function getAvailableSizes(model: ImageModel): ImageSize[] {
-  if (model === 'dall-e-2') {
-    return ['1024x1024']
-  }
-  // DALL-E 3 and gpt-image-1 support multiple sizes
+  if (model === 'dall-e-2') return ['1024x1024']
   return ['1024x1024', '1792x1024', '1024x1792']
 }
 
-/**
- * Estimates the cost of generating an image
- */
-export function estimateCost(
-  model: ImageModel,
-  quality: ImageQuality,
-  size: ImageSize
-): number {
-  if (model === 'dall-e-2') {
-    // DALL-E 2 pricing
-    return 0.016 // $0.016 per 1024x1024 image
-  }
+export function estimateCost(model: ImageModel, quality: ImageQuality, size: ImageSize): number {
+  if (model === 'dall-e-2') return 0.016
 
   if (model === 'gpt-image-1') {
-    // gpt-image-1 pricing (as of Dec 2024)
-    // Uses low/medium/high quality instead of standard/hd
-    if (quality === 'high') {
-      if (size === '1024x1024') return 0.08
-      return 0.12 // 1792x1024 or 1024x1792
-    }
-    if (quality === 'medium') {
-      if (size === '1024x1024') return 0.04
-      return 0.08 // 1792x1024 or 1024x1792
-    }
-    // Low quality
-    if (size === '1024x1024') return 0.02
-    return 0.04 // 1792x1024 or 1024x1792
+    if (quality === 'high') return size === '1024x1024' ? 0.08 : 0.12
+    if (quality === 'medium') return size === '1024x1024' ? 0.04 : 0.08
+    return size === '1024x1024' ? 0.02 : 0.04
   }
 
-  // DALL-E 3 pricing
-  if (quality === 'hd') {
-    if (size === '1024x1024') return 0.08
-    return 0.12 // 1792x1024 or 1024x1792
-  }
-
-  // Standard quality
-  if (size === '1024x1024') return 0.04
-  return 0.08 // 1792x1024 or 1024x1792
+  // DALL-E 3
+  if (quality === 'hd') return size === '1024x1024' ? 0.08 : 0.12
+  return size === '1024x1024' ? 0.04 : 0.08
 }
