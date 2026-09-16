@@ -1,16 +1,29 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import type { Character, StoryContent } from "../types";
 import { buildImagePrompt, validatePrompt } from "../lib/imagePromptBuilder";
 import {
   generateImage,
   isOpenAIConfigured,
-  estimateCost,
   getDefaultModel,
+  IMAGE_MODELS,
+  IMAGE_QUALITIES,
 } from "../lib/openaiImageGen";
-import type { GenerateImageOptions } from "../lib/openaiImageGen";
+import type {
+  GenerateImageOptions,
+  ImageModel,
+  ImageQuality,
+  ImageSize,
+} from "../lib/openaiImageGen";
 import { Button } from "./Button";
 import { TextArea } from "./TextArea";
+
+const QUALITY_LABELS: Record<ImageQuality, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High (Higher Cost)",
+  xhigh: "Extra High (Higher Cost)",
+  max: "Max (Highest Cost)",
+};
 
 type ImageGeneratorDialogProps = {
   character: Pick<Character, "name" | "shortDescription" | "descriptors">;
@@ -39,9 +52,7 @@ export function ImageGeneratorDialog({
     | "oil-painting"
     | "digital-art"
   >("portrait");
-  const [size, setSize] = useState<"1024x1024" | "1792x1024" | "1024x1792">(
-    "1024x1024"
-  );
+  const [size, setSize] = useState<ImageSize>("1024x1024");
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(
     null
   );
@@ -50,13 +61,9 @@ export function ImageGeneratorDialog({
   const [isGenerating, setIsGenerating] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState<string>("");
 
-  const model = getDefaultModel();
+  const [model, setModel] = useState<ImageModel>(getDefaultModel);
+  const [quality, setQuality] = useState<ImageQuality>("medium");
 
-  // Set default quality based on model
-  const defaultQuality = model === "gpt-image-1" ? "medium" : "standard";
-  const [quality, setQuality] = useState<string>(defaultQuality);
-
-  const estimatedCost = estimateCost(model, quality as any, size);
   const availableReferenceImages = referenceImages
     .map((url) => url.trim())
     .filter((url) => url.length > 0);
@@ -64,7 +71,7 @@ export function ImageGeneratorDialog({
   useEffect(() => {
     const initialPrompt = buildImagePrompt(character, {
       style,
-      quality: quality === "hd" ? "ultra" : "high",
+      quality: quality === "xhigh" || quality === "max" ? "ultra" : "high",
       storyContent,
     });
     setPrompt(initialPrompt);
@@ -78,10 +85,6 @@ export function ImageGeneratorDialog({
       setError(validation.error || "Invalid prompt");
       return;
     }
-    if (referenceImageUrl && model === "dall-e-3") {
-      setError("Reference images are not supported with the DALL-E 3 model");
-      return;
-    }
 
     setIsGenerating(true);
     setStep("generating");
@@ -90,7 +93,7 @@ export function ImageGeneratorDialog({
       const options: GenerateImageOptions = {
         prompt,
         size,
-        quality: quality as any,
+        quality,
         model,
         referenceImageUrl: referenceImageUrl || undefined,
       };
@@ -152,8 +155,8 @@ export function ImageGeneratorDialog({
             OpenAI Not Configured
           </h2>
           <p style={{ color: "var(--color-text-muted)", margin: "0 0 16px 0" }}>
-            To use AI image generation, you need to configure your OpenAI API
-            key. Add VITE_OPENAI_API_KEY to your environment variables.
+            To use AI image generation, set VITE_APPWRITE_IMAGE_FUNCTION_ID to
+            the ID of the deployed generate-image Appwrite Function.
           </p>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button onClick={onClose}>Close</Button>
@@ -248,16 +251,6 @@ export function ImageGeneratorDialog({
                     >
                       Reference image (Select One)
                     </label>
-                    {model === "dall-e-3" && referenceImageUrl ? (
-                      <div
-                        style={{
-                          color: "crimson",
-                          fontSize: "var(--font-sm)",
-                        }}
-                      >
-                        DALL-E 3 does not support reference images.
-                      </div>
-                    ) : null}
                   </div>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button
@@ -363,7 +356,9 @@ export function ImageGeneratorDialog({
                   </label>
                   <select
                     value={quality}
-                    onChange={(e) => setQuality(e.currentTarget.value)}
+                    onChange={(e) =>
+                      setQuality(e.currentTarget.value as ImageQuality)
+                    }
                     style={{
                       width: "100%",
                       padding: "8px 12px",
@@ -373,18 +368,11 @@ export function ImageGeneratorDialog({
                       color: "var(--color-text)",
                     }}
                   >
-                    {model === "gpt-image-1" ? (
-                      <>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High (Higher Cost)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="standard">Standard</option>
-                        <option value="hd">HD (Higher Cost)</option>
-                      </>
-                    )}
+                    {IMAGE_QUALITIES.map((q) => (
+                      <option key={q} value={q}>
+                        {QUALITY_LABELS[q]}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -414,8 +402,8 @@ export function ImageGeneratorDialog({
                     }}
                   >
                     <option value="1024x1024">Square (1024×1024)</option>
-                    <option value="1024x1536">Landscape (1024×1536)</option>
-                    <option value="1536x1024">Portrait (1536x1024)</option>
+                    <option value="1536x1024">Landscape (1536×1024)</option>
+                    <option value="1024x1536">Portrait (1024×1536)</option>
                   </select>
                 </div>
               </div>
@@ -434,21 +422,43 @@ export function ImageGeneratorDialog({
                     fontSize: "var(--font-sm)",
                   }}
                 >
-                  <strong>Model:</strong>{" "}
-                  {model === "dall-e-3"
-                    ? "DALL-E 3"
-                    : model === "gpt-image-1"
-                    ? "GPT Image 1"
-                    : "DALL-E 2"}
+                  <label
+                    htmlFor="image-model"
+                    style={{ display: "block", marginBottom: 8, fontWeight: 500 }}
+                  >
+                    Model
+                  </label>
+                  <select
+                    id="image-model"
+                    value={model}
+                    onChange={(e) =>
+                      setModel(e.currentTarget.value as ImageModel)
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--color-surface)",
+                      color: "var(--color-text)",
+                    }}
+                  >
+                    {IMAGE_MODELS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div
                   style={{
                     color: "var(--color-text-muted)",
                     fontSize: "var(--font-sm)",
-                    marginTop: 4,
+                    marginTop: 8,
                   }}
                 >
-                  Estimated cost: ${estimatedCost.toFixed(3)} USD
+                  Flare is fast for everyday images; Sunburst is best when
+                  editing from a reference image.
                 </div>
               </div>
 

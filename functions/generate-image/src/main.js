@@ -1,4 +1,21 @@
+const MODELS = [
+  'gpt-image-2.5-flare',
+  'gpt-image-2.5-sunburst',
+  'gpt-image-2.5-flare-2026-09-08',
+  'gpt-image-2.5-sunburst-2026-09-08',
+]
+const QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max']
+const SIZES = ['1024x1024', '1536x1024', '1024x1536']
+const MAX_PROMPT_LENGTH = 4000
+// Reference images are uploaded through Cloudinary; refuse to fetch anything else
+const REFERENCE_IMAGE_HOSTS = ['res.cloudinary.com']
+
 export default async ({ req, res, log, error }) => {
+  // Appwrite sets this header only for executions made by a logged-in user
+  if (!req.headers['x-appwrite-user-id']) {
+    return res.json({ error: 'Authentication required' }, 401)
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return res.json({ error: 'OpenAI API key not configured' }, 500)
@@ -11,18 +28,50 @@ export default async ({ req, res, log, error }) => {
     return res.json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const { prompt, model = 'gpt-image-1', size = '1024x1024', quality = 'medium', referenceImageUrl } = body ?? {}
+  const {
+    prompt,
+    model = 'gpt-image-2.5-flare',
+    size = '1024x1024',
+    quality = 'medium',
+    referenceImageUrl,
+  } = body ?? {}
 
-  if (!prompt?.trim()) {
+  if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.json({ error: 'prompt is required' }, 400)
   }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    return res.json({ error: `prompt must be at most ${MAX_PROMPT_LENGTH} characters` }, 400)
+  }
+  if (!MODELS.includes(model)) {
+    return res.json({ error: `Unsupported model: ${model}` }, 400)
+  }
+  if (!QUALITIES.includes(quality)) {
+    return res.json({ error: `Unsupported quality: ${quality}` }, 400)
+  }
+  if (!SIZES.includes(size)) {
+    return res.json({ error: `Unsupported size: ${size}` }, 400)
+  }
+
+  let referenceUrl
+  if (referenceImageUrl) {
+    try {
+      referenceUrl = new URL(referenceImageUrl)
+    } catch {
+      return res.json({ error: 'Invalid reference image URL' }, 400)
+    }
+    if (referenceUrl.protocol !== 'https:' || !REFERENCE_IMAGE_HOSTS.includes(referenceUrl.hostname)) {
+      return res.json({ error: 'Reference image must be hosted on Cloudinary' }, 400)
+    }
+  }
+
+  log(`user=${req.headers['x-appwrite-user-id']} model=${model} quality=${quality} size=${size} reference=${Boolean(referenceUrl)}`)
 
   try {
     let response
 
-    if (referenceImageUrl) {
+    if (referenceUrl) {
       // Fetch the reference image and forward as multipart
-      const imgResponse = await fetch(referenceImageUrl)
+      const imgResponse = await fetch(referenceUrl, { redirect: 'error' })
       if (!imgResponse.ok) {
         return res.json({ error: 'Failed to fetch reference image' }, 400)
       }
@@ -33,8 +82,8 @@ export default async ({ req, res, log, error }) => {
       form.append('prompt', prompt.trim())
       form.append('n', '1')
       form.append('size', size)
+      form.append('quality', quality)
       form.append('image', imgBlob, 'reference.png')
-      if (model === 'gpt-image-1') form.append('quality', quality)
 
       response = await fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST',
@@ -42,16 +91,13 @@ export default async ({ req, res, log, error }) => {
         body: form,
       })
     } else {
-      const requestBody = { model, prompt: prompt.trim(), n: 1, size }
-      if (model === 'dall-e-3' || model === 'gpt-image-1') requestBody.quality = quality
-
       response = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ model, prompt: prompt.trim(), n: 1, size, quality }),
       })
     }
 

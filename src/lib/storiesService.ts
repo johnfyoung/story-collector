@@ -94,16 +94,6 @@ export class StoriesRemote {
     ];
   }
 
-  private permsFile() {
-    const user = Role.user(this.ownerId);
-    return [
-      Permission.read(Role.any()),
-      Permission.write(user),
-      Permission.update(user),
-      Permission.delete(user),
-    ];
-  }
-
   async listWithFiles(): Promise<{
     stories: Story[];
     files: Record<string, string>;
@@ -149,7 +139,7 @@ export class StoriesRemote {
       BUCKET_ID,
       ID.unique(),
       fileObj,
-      this.permsFile()
+      this.permsOwner()
     );
     const doc = await this.db.createDocument(
       DB_ID,
@@ -198,7 +188,7 @@ export class StoriesRemote {
       BUCKET_ID,
       ID.unique(),
       fileObj,
-      this.permsFile()
+      this.permsOwner()
     );
     await this.db.updateDocument(DB_ID, STORIES_COLLECTION_ID, storyId, {
       jsonFileId: file.$id,

@@ -289,7 +289,7 @@ VITE_APPWRITE_BUCKET_STORIES=
 
 # Optional — AI image generation (Appwrite Function proxy)
 VITE_APPWRITE_IMAGE_FUNCTION_ID=   # Appwrite Function ID for generate-image
-VITE_OPENAI_IMAGE_MODEL=gpt-image-1  # or dall-e-3, dall-e-2
+VITE_OPENAI_IMAGE_MODEL=gpt-image-2.5-flare  # or gpt-image-2.5-sunburst (or a dated snapshot)
 
 # Optional — Cloudinary
 VITE_CLOUDINARY_CLOUD_NAME=

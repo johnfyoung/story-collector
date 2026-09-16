@@ -47,7 +47,7 @@ VITE_APPWRITE_BUCKET_STORIES=your-bucket-id
 # Deploy functions/generate-image to Appwrite and paste its ID here.
 # Set OPENAI_API_KEY in the Appwrite Function's environment — not here.
 VITE_APPWRITE_IMAGE_FUNCTION_ID=your-function-id
-VITE_OPENAI_IMAGE_MODEL=gpt-image-1
+VITE_OPENAI_IMAGE_MODEL=gpt-image-2.5-flare
 
 # Cloudinary image uploads (optional)
 VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
